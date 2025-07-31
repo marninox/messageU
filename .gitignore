@@ -115,6 +115,22 @@ dmypy.json
 ehthumbs.db
 Thumbs.db
 
+# C++ compilation artifacts
+*.o
+*.obj
+*.exe
+*.out
+*.app
+*.dSYM/
+*.dylib
+*.so
+*.a
+*.lib
+
+# C++ executables
+messageu_client
+test_protocol_handler
+
 # MessageU specific
 *.db
 *.sqlite
