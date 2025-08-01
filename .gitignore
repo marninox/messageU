@@ -134,4 +134,8 @@ test_protocol_handler
 # MessageU specific
 *.db
 *.sqlite
-*.log 
+*.log
+
+# Configuration files (test files)
+server.info
+me.info 
