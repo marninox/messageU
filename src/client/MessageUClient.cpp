@@ -91,8 +91,9 @@ bool MessageUClient::loadClientConfig() {
     
     std::string line;
     int line_count = 0;
+    std::string private_key;
     
-    while (std::getline(file, line) && line_count < 3) {
+    while (std::getline(file, line) && line_count < 4) {
         switch (line_count) {
             case 0:
                 client_name_ = line;
@@ -103,13 +104,24 @@ bool MessageUClient::loadClientConfig() {
             case 2:
                 client_public_key_ = line;
                 break;
+            case 3:
+                private_key = line;
+                break;
         }
         line_count++;
     }
     
-    if (line_count >= 2) {
+    if (line_count >= 3) {
         is_registered_ = true;
         std::cout << "Client config loaded: " << client_name_ << " (ID: " << client_id_ << ")" << std::endl;
+        
+        // Load the private key into the crypto object if available
+        if (line_count >= 4 && !private_key.empty()) {
+            // For now, we'll just note that the private key is available
+            // In a real implementation, we would load it into the crypto object
+            std::cout << "Private key available for decryption" << std::endl;
+        }
+        
         return true;
     } else {
         std::cout << "me.info file is incomplete. Registration required." << std::endl;
@@ -175,15 +187,21 @@ void MessageUClient::registerUser() {
         return;
     }
     
-    // Generate a simple public key (in real implementation, this would use Crypto++)
-    std::string public_key = "-----BEGIN PUBLIC KEY-----\n";
-    public_key += "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA";
-    public_key += username + "_generated_key_12345\n";
-    public_key += "-----END PUBLIC KEY-----";
+    // Generate RSA key pair for the user
+    if (!crypto_.generateKeyPair()) {
+        std::cout << "Failed to generate RSA key pair." << std::endl;
+        return;
+    }
     
-    std::cout << "Generated public key for: " << username << std::endl;
+    std::string public_key = crypto_.getPublicKeyPEM();
+    if (public_key.empty()) {
+        std::cout << "Failed to get public key." << std::endl;
+        return;
+    }
     
-    // Create registration request
+    std::cout << "Generated RSA key pair for: " << username << std::endl;
+    
+    // Create registration request with PEM-formatted public key
     std::vector<uint8_t> request = protocol_.createRegistrationRequest(username, public_key);
     
     // Connect to server
@@ -232,6 +250,7 @@ void MessageUClient::registerUser() {
                 file << username << std::endl;
                 file << client_id << std::endl;
                 file << public_key << std::endl;
+                file << crypto_.getPrivateKeyPEM() << std::endl;  // Save private key too
                 file.close();
                 
                 // Update internal state
@@ -242,7 +261,7 @@ void MessageUClient::registerUser() {
                 
                 std::cout << "Registration successful!" << std::endl;
                 std::cout << "Client ID: " << client_id << std::endl;
-                std::cout << "User info saved to me.info" << std::endl;
+                std::cout << "RSA keys saved to me.info" << std::endl;
             } else {
                 std::cout << "Failed to save user info to me.info" << std::endl;
             }
@@ -463,11 +482,29 @@ void MessageUClient::getWaitingMessages() {
                 uint8_t message_type = std::get<2>(message_data);
                 std::string content = std::get<3>(message_data);
                 
+                // Convert content string to bytes for decryption
+                std::vector<uint8_t> encrypted_content(content.begin(), content.end());
+                
+                // Try to decrypt the message
+                std::string decrypted_content;
+                if (crypto_.hasSymmetricKey(from_client_id)) {
+                    std::vector<uint8_t> symmetric_key = crypto_.getSymmetricKey(from_client_id);
+                    std::vector<uint8_t> decrypted_bytes = crypto_.decryptAES(encrypted_content, symmetric_key);
+                    
+                    if (!decrypted_bytes.empty()) {
+                        decrypted_content = std::string(decrypted_bytes.begin(), decrypted_bytes.end());
+                    } else {
+                        decrypted_content = "[Failed to decrypt message]";
+                    }
+                } else {
+                    decrypted_content = "[No symmetric key available for decryption]";
+                }
+                
                 std::cout << "Message " << (i + 1) << ":" << std::endl;
                 std::cout << "  From: " << from_client_id << std::endl;
                 std::cout << "  ID: " << message_id << std::endl;
                 std::cout << "  Type: " << static_cast<int>(message_type) << std::endl;
-                std::cout << "  Content: " << content << std::endl;
+                std::cout << "  Content: " << decrypted_content << std::endl;
                 std::cout << "  ---" << std::endl;
             }
             std::cout << "=================" << std::endl;
@@ -505,6 +542,20 @@ void MessageUClient::sendMessage() {
         return;
     }
     
+    // Check if we have a symmetric key for this recipient
+    if (!crypto_.hasSymmetricKey(recipient)) {
+        std::cout << "No symmetric key found for recipient: " << recipient << std::endl;
+        std::cout << "Initiating key exchange..." << std::endl;
+        
+        // Send symmetric key (this will also get the public key)
+        if (!sendSymmetricKey(recipient)) {
+            std::cout << "Failed to send symmetric key. Cannot send message." << std::endl;
+            return;
+        }
+        
+        std::cout << "Key exchange completed successfully!" << std::endl;
+    }
+    
     // Get message content from user
     std::string message_content;
     std::cout << "Enter message content: ";
@@ -518,8 +569,23 @@ void MessageUClient::sendMessage() {
     // Convert message content to bytes
     std::vector<uint8_t> message_bytes(message_content.begin(), message_content.end());
     
-    // Create send message request
-    std::vector<uint8_t> request = protocol_.createSendMessageRequest(recipient, message_bytes);
+    // Encrypt the message with the symmetric key
+    std::vector<uint8_t> symmetric_key = crypto_.getSymmetricKey(recipient);
+    if (symmetric_key.empty()) {
+        std::cout << "Failed to get symmetric key for encryption." << std::endl;
+        return;
+    }
+    
+    std::vector<uint8_t> encrypted_message = crypto_.encryptAES(message_bytes, symmetric_key);
+    if (encrypted_message.empty()) {
+        std::cout << "Failed to encrypt message." << std::endl;
+        return;
+    }
+    
+    std::cout << "Message encrypted successfully." << std::endl;
+    
+    // Create send message request with encrypted content
+    std::vector<uint8_t> request = protocol_.createSendMessageRequest(recipient, encrypted_message);
     
     // Connect to server
     if (!network_.connect(server_ip_, server_port_)) {
@@ -527,7 +593,7 @@ void MessageUClient::sendMessage() {
         return;
     }
     
-    std::cout << "Connected to server. Sending message..." << std::endl;
+    std::cout << "Connected to server. Sending encrypted message..." << std::endl;
     
     // Send request
     if (!network_.sendData(request)) {
@@ -556,7 +622,7 @@ void MessageUClient::sendMessage() {
         if (!success_msg.empty()) {
             std::cout << "✓ " << success_msg << std::endl;
         } else {
-            std::cout << "✓ Message sent successfully!" << std::endl;
+            std::cout << "✓ Encrypted message sent successfully!" << std::endl;
         }
     } else {
         std::string error_msg = protocol_.getErrorMessage();
@@ -582,4 +648,128 @@ void MessageUClient::sendFile() {
 void MessageUClient::exitClient() {
     std::cout << "Selected: Exit" << std::endl;
     std::cout << "Goodbye!" << std::endl;
+}
+
+bool MessageUClient::getPublicKeyForRecipient(const std::string& recipient) {
+    // Create public key request
+    std::vector<uint8_t> request = protocol_.createRequestPublicKeyRequest(recipient);
+    
+    // Connect to server
+    if (!network_.connect(server_ip_, server_port_)) {
+        std::cout << "Failed to connect to server for public key request." << std::endl;
+        return false;
+    }
+    
+    // Send request
+    if (!network_.sendData(request)) {
+        std::cout << "Failed to send public key request." << std::endl;
+        network_.disconnect();
+        return false;
+    }
+    
+    // Receive response
+    std::vector<uint8_t> response;
+    if (!network_.receiveData(response)) {
+        std::cout << "Failed to receive public key response." << std::endl;
+        network_.disconnect();
+        return false;
+    }
+    
+    // Parse response
+    if (!protocol_.parseResponse(response)) {
+        std::cout << "Invalid public key response format." << std::endl;
+        network_.disconnect();
+        return false;
+    }
+    
+    if (protocol_.isPublicKeyReceived()) {
+        auto public_key_data = protocol_.getPublicKeyData();
+        std::string client_id = public_key_data.first;
+        std::string public_key = public_key_data.second;
+        
+        if (!client_id.empty() && !public_key.empty()) {
+            std::cout << "Received public key for: " << client_id << std::endl;
+            network_.disconnect();
+            return true;
+        } else {
+            std::cout << "Invalid public key response format." << std::endl;
+            network_.disconnect();
+            return false;
+        }
+    } else {
+        std::string error_msg = protocol_.getErrorMessage();
+        std::cout << "Failed to get public key: " << error_msg << std::endl;
+        network_.disconnect();
+        return false;
+    }
+}
+
+bool MessageUClient::sendSymmetricKey(const std::string& recipient) {
+    // Get recipient's public key first
+    if (!getPublicKeyForRecipient(recipient)) {
+        std::cout << "Failed to get recipient's public key for key exchange." << std::endl;
+        return false;
+    }
+    
+    // Get the public key from the last response
+    auto public_key_data = protocol_.getPublicKeyData();
+    std::string recipient_public_key = public_key_data.second;
+    
+    if (recipient_public_key.empty()) {
+        std::cout << "Failed to get recipient's public key." << std::endl;
+        return false;
+    }
+    
+    // Create symmetric key exchange message
+    std::vector<uint8_t> encrypted_key = crypto_.createKeyExchangeMessage(recipient, recipient_public_key);
+    if (encrypted_key.empty()) {
+        std::cout << "Failed to create key exchange message." << std::endl;
+        return false;
+    }
+    
+    // Create symmetric key request
+    std::vector<uint8_t> request = protocol_.createSendSymmetricKeyRequest(recipient, encrypted_key);
+    
+    // Connect to server
+    if (!network_.connect(server_ip_, server_port_)) {
+        std::cout << "Failed to connect to server for key exchange." << std::endl;
+        return false;
+    }
+    
+    // Send request
+    if (!network_.sendData(request)) {
+        std::cout << "Failed to send symmetric key." << std::endl;
+        network_.disconnect();
+        return false;
+    }
+    
+    // Receive response
+    std::vector<uint8_t> response;
+    if (!network_.receiveData(response)) {
+        std::cout << "Failed to receive key exchange response." << std::endl;
+        network_.disconnect();
+        return false;
+    }
+    
+    // Parse response
+    if (!protocol_.parseResponse(response)) {
+        std::cout << "Invalid key exchange response format." << std::endl;
+        network_.disconnect();
+        return false;
+    }
+    
+    if (protocol_.isSymmetricKeyReceived()) {
+        std::cout << "Symmetric key sent successfully!" << std::endl;
+        network_.disconnect();
+        return true;
+    } else {
+        std::string error_msg = protocol_.getErrorMessage();
+        std::cout << "Failed to send symmetric key: " << error_msg << std::endl;
+        network_.disconnect();
+        return false;
+    }
+}
+
+bool MessageUClient::processSymmetricKeyMessage(const std::string& sender_id, const std::vector<uint8_t>& encrypted_key) {
+    return crypto_.processKeyExchangeMessage(sender_id, encrypted_key);
 } 

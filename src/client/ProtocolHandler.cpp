@@ -12,7 +12,7 @@ ProtocolHandler::~ProtocolHandler() {
 }
 
 std::vector<uint8_t> ProtocolHandler::createRegistrationRequest(const std::string& username, const std::string& public_key) {
-    // Create payload: username(255) + public_key(160)
+    // Create payload: username(255) + public_key(1024)
     std::vector<uint8_t> payload;
     
     auto username_bytes = packString(username, ProtocolSizes::USERNAME_SIZE);
@@ -220,6 +220,52 @@ std::vector<uint8_t> ProtocolHandler::createRequestPublicKeyRequest(const std::s
     return result;
 }
 
+std::vector<uint8_t> ProtocolHandler::createSendSymmetricKeyRequest(const std::string& recipient, const std::vector<uint8_t>& encrypted_key) {
+    // Create payload: recipient(255) + key_length(4) + encrypted_key
+    std::vector<uint8_t> payload;
+    
+    auto recipient_bytes = packString(recipient, ProtocolSizes::USERNAME_SIZE);
+    payload.insert(payload.end(), recipient_bytes.begin(), recipient_bytes.end());
+    
+    // Key length (4 bytes, little-endian)
+    uint32_t key_length = static_cast<uint32_t>(encrypted_key.size());
+    payload.push_back(key_length & 0xFF);
+    payload.push_back((key_length >> 8) & 0xFF);
+    payload.push_back((key_length >> 16) & 0xFF);
+    payload.push_back((key_length >> 24) & 0xFF);
+    
+    // Encrypted key content
+    payload.insert(payload.end(), encrypted_key.begin(), encrypted_key.end());
+    
+    // Create header
+    uint32_t checksum = calculateChecksum(payload);
+    
+    std::vector<uint8_t> result;
+    
+    // Version (1 byte)
+    result.push_back(1);
+    
+    // Code (2 bytes, little-endian)
+    result.push_back(ProtocolCodes::SEND_SYMMETRIC_KEY & 0xFF);
+    result.push_back((ProtocolCodes::SEND_SYMMETRIC_KEY >> 8) & 0xFF);
+    
+    // Payload size (2 bytes, little-endian)
+    uint16_t payload_size = static_cast<uint16_t>(payload.size());
+    result.push_back(payload_size & 0xFF);
+    result.push_back((payload_size >> 8) & 0xFF);
+    
+    // Checksum (4 bytes, little-endian)
+    result.push_back(checksum & 0xFF);
+    result.push_back((checksum >> 8) & 0xFF);
+    result.push_back((checksum >> 16) & 0xFF);
+    result.push_back((checksum >> 24) & 0xFF);
+    
+    // Add payload
+    result.insert(result.end(), payload.begin(), payload.end());
+    
+    return result;
+}
+
 std::vector<uint8_t> ProtocolHandler::createLogoutRequest() {
     // Empty payload
     std::vector<uint8_t> payload;
@@ -305,6 +351,13 @@ bool ProtocolHandler::isSendMessageSuccess() const {
     return code == ProtocolCodes::SEND_MESSAGE_SUCCESS;
 }
 
+bool ProtocolHandler::isSymmetricKeyReceived() const {
+    if (receive_buffer_.size() < 9) return false;
+    
+    uint16_t code = static_cast<uint16_t>(receive_buffer_[1]) | (static_cast<uint16_t>(receive_buffer_[2]) << 8);
+    return code == ProtocolCodes::SYMMETRIC_KEY_RESPONSE;
+}
+
 std::string ProtocolHandler::getErrorMessage() const {
     if (receive_buffer_.size() < 9) return "";
     
@@ -364,14 +417,14 @@ std::pair<std::string, std::string> ProtocolHandler::getPublicKeyData() const {
     uint16_t payload_size = static_cast<uint16_t>(receive_buffer_[3]) | (static_cast<uint16_t>(receive_buffer_[4]) << 8);
     if (receive_buffer_.size() < 9 + payload_size) return {"", ""};
     
-    // Parse: client_id(16) + public_key(160)
-    if (payload_size < 16 + 160) return {"", ""};
+    // Parse: client_id(16) + public_key(1024)
+    if (payload_size < 16 + 1024) return {"", ""};
     
     // Extract client ID (16 bytes)
     std::string client_id = unpackString(receive_buffer_, 9, 16);
     
-    // Extract public key (160 bytes)
-    std::string public_key = unpackString(receive_buffer_, 9 + 16, 160);
+    // Extract public key (1024 bytes)
+    std::string public_key = unpackString(receive_buffer_, 9 + 16, 1024);
     
     return {client_id, public_key};
 }
@@ -436,6 +489,36 @@ std::vector<std::tuple<std::string, uint32_t, uint8_t, std::string>> ProtocolHan
     }
     
     return messages;
+}
+
+std::pair<std::string, std::vector<uint8_t>> ProtocolHandler::getSymmetricKeyData() const {
+    if (receive_buffer_.size() < 9) return {"", std::vector<uint8_t>()};
+    
+    // Extract payload
+    uint16_t payload_size = static_cast<uint16_t>(receive_buffer_[3]) | (static_cast<uint16_t>(receive_buffer_[4]) << 8);
+    if (receive_buffer_.size() < 9 + payload_size) return {"", std::vector<uint8_t>()};
+    
+    // Parse: sender_id(16) + key_length(4) + encrypted_key
+    if (payload_size < 16 + 4) return {"", std::vector<uint8_t>()};
+    
+    // Extract sender ID (16 bytes)
+    std::string sender_id = unpackString(receive_buffer_, 9, 16);
+    
+    // Extract key length (4 bytes)
+    uint32_t key_length = static_cast<uint32_t>(receive_buffer_[25]) |
+                         (static_cast<uint32_t>(receive_buffer_[26]) << 8) |
+                         (static_cast<uint32_t>(receive_buffer_[27]) << 16) |
+                         (static_cast<uint32_t>(receive_buffer_[28]) << 24);
+    
+    // Extract encrypted key
+    if (payload_size < 16 + 4 + key_length) return {"", std::vector<uint8_t>()};
+    
+    std::vector<uint8_t> encrypted_key;
+    for (uint32_t i = 0; i < key_length; i++) {
+        encrypted_key.push_back(receive_buffer_[29 + i]);
+    }
+    
+    return {sender_id, encrypted_key};
 }
 
 std::vector<std::pair<std::string, std::vector<uint8_t>>> ProtocolHandler::getMessages() const {

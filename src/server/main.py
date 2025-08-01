@@ -12,6 +12,7 @@ from client import ClientConnection, ClientManager
 from message import Message, MessageManager, MessageFormatter
 from db_handler import DatabaseHandler
 from protocol_handler import ProtocolHandler
+import struct
 
 # Add the server directory to the path for imports
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -121,14 +122,29 @@ class MessageUServer:
         
         try:
             while self.running:
-                # Receive data from client
-                data = client_socket.recv(1024)
-                if not data:
-                    print(f"Client {client_address} disconnected")
-                    break
-                
-                # Parse the request
-                code, payload = self.protocol_handler.parse_request(data)
+                # Read header first (9 bytes)
+                header = b''
+                while len(header) < 9:
+                    chunk = client_socket.recv(9 - len(header))
+                    if not chunk:
+                        print(f"Client {client_address} disconnected")
+                        return
+                    header += chunk
+
+                version, code, payload_size, checksum = struct.unpack('<BHHI', header)
+
+                # Now read the payload
+                payload = b''
+                while len(payload) < payload_size:
+                    chunk = client_socket.recv(payload_size - len(payload))
+                    if not chunk:
+                        print(f"Client {client_address} disconnected")
+                        return
+                    payload += chunk
+
+                # Now process the request
+                full_data = header + payload
+                code, payload = self.protocol_handler.parse_request(full_data)
                 if not code:
                     print(f"Invalid request from {client_address}")
                     continue
@@ -160,6 +176,8 @@ class MessageUServer:
                 return self.handle_request_users(payload)
             elif header == 5002:  # Request public key
                 return self.handle_get_public_key_request(payload)
+            elif header == 5004:  # Send symmetric key
+                return self.handle_send_symmetric_key_request(payload)
             elif header == 6000:  # Logout request
                 return self.handle_logout_request(payload)
             else:
@@ -174,14 +192,16 @@ class MessageUServer:
         """Handle client registration request."""
         try:
             # Parse registration data from payload
-            if len(payload) < 415:  # username(255) + public_key(160)
+            if len(payload) < 1279:  # username(255) + public_key(1024)
                 return self.protocol_handler.create_error_response("Invalid registration payload")
             
             username_bytes = payload[:255]
-            public_key_bytes = payload[255:415]
+            public_key_bytes = payload[255:1279]
             
-            username = username_bytes.rstrip(b'\0').decode('utf-8')
-            public_key = public_key_bytes.rstrip(b'\0').decode('utf-8')
+            # Username is utf-8, public key is binary (store as latin1)
+            username = username_bytes.rstrip(b'\0').decode('utf-8', errors='replace')
+            # Handle public key as PEM text (utf-8)
+            public_key = public_key_bytes.rstrip(b'\0').decode('utf-8', errors='replace')
             
             # Generate a simple client ID (in real implementation, this would be a proper UUID)
             import hashlib
@@ -361,6 +381,58 @@ class MessageUServer:
         except Exception as e:
             print(f"Error in public key request: {e}")
             return self.protocol_handler.create_error_response("Failed to get public key")
+    
+    def handle_send_symmetric_key_request(self, payload):
+        """Handle symmetric key exchange request."""
+        try:
+            # Parse symmetric key data from payload
+            # Format: recipient(255) + key_length(4) + encrypted_key
+            if len(payload) < 259:  # recipient(255) + key_length(4)
+                return self.protocol_handler.create_error_response("Invalid symmetric key request payload")
+            
+            recipient_bytes = payload[:255]
+            recipient = recipient_bytes.rstrip(b'\0').decode('utf-8')
+            
+            if not recipient:
+                return self.protocol_handler.create_error_response("Empty recipient")
+            
+            # Parse key length (4 bytes, little-endian)
+            key_length = int.from_bytes(payload[255:259], byteorder='little')
+            
+            if len(payload) < 259 + key_length:
+                return self.protocol_handler.create_error_response("Invalid encrypted key length")
+            
+            # Extract encrypted key
+            encrypted_key = payload[259:259 + key_length]
+            
+            print(f"Symmetric key request: from <unknown> to {recipient}")
+            print(f"Encrypted key length: {key_length} bytes")
+            
+            # Validate that recipient exists
+            recipient_client = self.database.get_client_by_identifier(recipient)
+            if not recipient_client:
+                print(f"Recipient not found: {recipient}")
+                return self.protocol_handler.create_error_response(f"Recipient '{recipient}' not found")
+            
+            print(f"Recipient found: {recipient_client['name']} (ID: {recipient_client['client_id']})")
+            
+            # Store the encrypted symmetric key in the database as a special message type
+            # For now, we'll use a placeholder sender ID
+            sender_id = "unknown_sender"
+            
+            # Convert encrypted key to string for storage
+            encrypted_key_str = encrypted_key.decode('latin1')  # Use latin1 to preserve binary data
+            
+            if self.database.store_message(sender_id, recipient_client['client_id'], 2, encrypted_key_str):
+                print(f"Symmetric key stored successfully for {recipient_client['name']}")
+                return self.protocol_handler.create_response(ProtocolCodes.SYMMETRIC_KEY_RESPONSE, b"Symmetric key received")
+            else:
+                print("Failed to store symmetric key in database")
+                return self.protocol_handler.create_error_response("Failed to store symmetric key")
+                
+        except Exception as e:
+            print(f"Error in symmetric key request: {e}")
+            return self.protocol_handler.create_error_response("Failed to process symmetric key")
     
     def handle_logout_request(self, payload):
         """Handle logout request."""

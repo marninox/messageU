@@ -22,6 +22,8 @@ namespace ProtocolCodes {
     const uint16_t USERS_RESPONSE = 5001;
     const uint16_t REQUEST_PUBLIC_KEY = 5002;
     const uint16_t PUBLIC_KEY_RESPONSE = 5003;
+    const uint16_t SEND_SYMMETRIC_KEY = 5004;
+    const uint16_t SYMMETRIC_KEY_RESPONSE = 5005;
     const uint16_t LOGOUT_REQUEST = 6000;
     const uint16_t LOGOUT_SUCCESS = 6001;
 }
@@ -29,7 +31,7 @@ namespace ProtocolCodes {
 // Protocol constants for field sizes
 namespace ProtocolSizes {
     const uint16_t USERNAME_SIZE = 255;
-    const uint16_t PUBLIC_KEY_SIZE = 160;
+    const uint16_t PUBLIC_KEY_SIZE = 1024;  // PEM public key size
     const uint16_t HEADER_SIZE = 9;  // version(1) + code(2) + payload_size(2) + checksum(4)
 }
 
@@ -56,6 +58,8 @@ public:
     std::vector<uint8_t> createRequestMessagesRequest();
     std::vector<uint8_t> createRequestUsersRequest();
     std::vector<uint8_t> createRequestPublicKeyRequest(const std::string& client_identifier);
+    std::vector<uint8_t> createSendSymmetricKeyRequest(const std::string& recipient, 
+                                                      const std::vector<uint8_t>& encrypted_key);
     std::vector<uint8_t> createLogoutRequest();
     
     // Protocol message parsing
@@ -67,6 +71,7 @@ public:
     bool isPublicKeyReceived() const;
     bool isMessagesReceived() const;
     bool isSendMessageSuccess() const;
+    bool isSymmetricKeyReceived() const;
     
     // Data extraction
     std::string getErrorMessage() const;
@@ -74,6 +79,7 @@ public:
     std::vector<std::pair<std::string, std::vector<uint8_t>>> getMessages() const;
     std::pair<std::string, std::string> getPublicKeyData() const;  // Returns (client_id, public_key)
     std::vector<std::tuple<std::string, uint32_t, uint8_t, std::string>> getMessagesData() const;  // Returns (from_client_id, message_id, message_type, content)
+    std::pair<std::string, std::vector<uint8_t>> getSymmetricKeyData() const;  // Returns (sender_id, encrypted_key)
 };
 
 #endif // PROTOCOL_HANDLER_H 

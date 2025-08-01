@@ -38,6 +38,11 @@ private:
     void sendFile();
     void exitClient();
     
+    // Key exchange helper methods
+    bool getPublicKeyForRecipient(const std::string& recipient);
+    bool sendSymmetricKey(const std::string& recipient);
+    bool processSymmetricKeyMessage(const std::string& sender_id, const std::vector<uint8_t>& encrypted_key);
+    
 public:
     MessageUClient();
     ~MessageUClient();

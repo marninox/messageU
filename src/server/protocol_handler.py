@@ -24,6 +24,8 @@ class ProtocolCodes(IntEnum):
     USERS_RESPONSE = 5001
     REQUEST_PUBLIC_KEY = 5002
     PUBLIC_KEY_RESPONSE = 5003
+    SEND_SYMMETRIC_KEY = 5004
+    SYMMETRIC_KEY_RESPONSE = 5005
     LOGOUT_REQUEST = 6000
     LOGOUT_SUCCESS = 6001
 
@@ -101,16 +103,17 @@ class ProtocolHandler:
     def create_public_key_response(self, success: bool, client_id: str = "", public_key: str = "", message: str = "") -> bytes:
         """Create public key response."""
         if success:
-            # Success: client_id(16) + public_key(160) + message
+            # Success: client_id(16) + public_key(1024) + message
             client_id_bytes = client_id.encode('utf-8')[:16].ljust(16, b'\0')
-            public_key_bytes = public_key.encode('utf-8')[:160].ljust(160, b'\0')
+            # Handle public key as PEM text (utf-8)
+            public_key_bytes = public_key.encode('utf-8')[:1024].ljust(1024, b'\0')
             message_bytes = message.encode('utf-8')
             payload = client_id_bytes + public_key_bytes + message_bytes
             return self.create_response(ProtocolCodes.PUBLIC_KEY_RESPONSE, payload)
         else:
             # Failure: error message
             payload = message.encode('utf-8')
-            return self.create_response(ProtocolCodes.REGISTRATION_FAILURE, payload)  # Using REGISTRATION_FAILURE for errors
+            return self.create_response(ProtocolCodes.REGISTRATION_FAILURE, payload)
     
     def create_messages_response(self, messages: List[Dict[str, Any]]) -> bytes:
         """Create messages response for waiting messages."""
