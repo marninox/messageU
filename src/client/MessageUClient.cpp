@@ -161,8 +161,104 @@ void MessageUClient::registerUser() {
         std::cout << "Already registered. Cannot register again." << std::endl;
         return;
     }
-    std::cout << "Selected: Register" << std::endl;
-    // Registration logic will be implemented here
+    
+    std::cout << "=== Registration ===" << std::endl;
+    
+    // Get username from user
+    std::string username;
+    std::cout << "Enter username: ";
+    std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n'); // Clear buffer
+    std::getline(std::cin, username);
+    
+    if (username.empty()) {
+        std::cout << "Username cannot be empty." << std::endl;
+        return;
+    }
+    
+    // Generate a simple public key (in real implementation, this would use Crypto++)
+    std::string public_key = "-----BEGIN PUBLIC KEY-----\n";
+    public_key += "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA";
+    public_key += username + "_generated_key_12345\n";
+    public_key += "-----END PUBLIC KEY-----";
+    
+    std::cout << "Generated public key for: " << username << std::endl;
+    
+    // Create registration request
+    std::vector<uint8_t> request = protocol_.createRegistrationRequest(username, public_key);
+    
+    // Connect to server
+    if (!network_.connect(server_ip_, server_port_)) {
+        std::cout << "Failed to connect to server." << std::endl;
+        return;
+    }
+    
+    std::cout << "Connected to server. Sending registration request..." << std::endl;
+    
+    // Send registration request
+    if (!network_.sendData(request)) {
+        std::cout << "Failed to send registration request." << std::endl;
+        network_.disconnect();
+        return;
+    }
+    
+    // Receive response
+    std::vector<uint8_t> response;
+    if (!network_.receiveData(response)) {
+        std::cout << "Failed to receive registration response." << std::endl;
+        network_.disconnect();
+        return;
+    }
+    
+    // Parse response
+    if (!protocol_.parseResponse(response)) {
+        std::cout << "Invalid response format." << std::endl;
+        network_.disconnect();
+        return;
+    }
+    
+    if (protocol_.isRegistrationSuccess()) {
+        // Extract client ID from response payload
+        if (response.size() >= 9 + 16) { // header(9) + client_id(16)
+            std::string client_id;
+            for (int i = 9; i < 25; i++) {
+                if (response[i] != 0) {
+                    client_id += static_cast<char>(response[i]);
+                }
+            }
+            
+            // Save to me.info file
+            std::ofstream file("me.info");
+            if (file.is_open()) {
+                file << username << std::endl;
+                file << client_id << std::endl;
+                file << public_key << std::endl;
+                file.close();
+                
+                // Update internal state
+                client_name_ = username;
+                client_id_ = client_id;
+                client_public_key_ = public_key;
+                is_registered_ = true;
+                
+                std::cout << "Registration successful!" << std::endl;
+                std::cout << "Client ID: " << client_id << std::endl;
+                std::cout << "User info saved to me.info" << std::endl;
+            } else {
+                std::cout << "Failed to save user info to me.info" << std::endl;
+            }
+        } else {
+            std::cout << "Invalid registration response format." << std::endl;
+        }
+    } else {
+        std::string error_msg = protocol_.getErrorMessage();
+        if (!error_msg.empty()) {
+            std::cout << "Registration failed: " << error_msg << std::endl;
+        } else {
+            std::cout << "Registration failed: Unknown error" << std::endl;
+        }
+    }
+    
+    network_.disconnect();
 }
 
 void MessageUClient::requestClientList() {

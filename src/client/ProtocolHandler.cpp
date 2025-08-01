@@ -11,179 +11,286 @@ ProtocolHandler::~ProtocolHandler() {
     // Destructor implementation
 }
 
-std::vector<uint8_t> ProtocolHandler::createRegistrationRequest(const std::string& username, 
-                                                              const std::string& public_key) {
-    // Create payload
+std::vector<uint8_t> ProtocolHandler::createRegistrationRequest(const std::string& username, const std::string& public_key) {
+    // Create payload: username(255) + public_key(160)
     std::vector<uint8_t> payload;
     
-    // Username: 255 bytes
     auto username_bytes = packString(username, ProtocolSizes::USERNAME_SIZE);
     payload.insert(payload.end(), username_bytes.begin(), username_bytes.end());
     
-    // Public key: 160 bytes
     auto public_key_bytes = packString(public_key, ProtocolSizes::PUBLIC_KEY_SIZE);
     payload.insert(payload.end(), public_key_bytes.begin(), public_key_bytes.end());
     
-    // Create header
+    // Create header: version(1) + code(2) + payload_size(2) + checksum(4) = 9 bytes
     uint32_t checksum = calculateChecksum(payload);
-    ProtocolHeader header;
-    header.version = 1;
-    header.code = ProtocolCodes::REGISTRATION_REQUEST;
-    header.payload_size = static_cast<uint16_t>(payload.size());
-    header.payload_checksum = checksum;
     
-    // Serialize header and combine with payload
-    std::vector<uint8_t> header_bytes = serializeHeader(header);
-    std::vector<uint8_t> result = header_bytes;
+    std::vector<uint8_t> result;
+    
+    // Version (1 byte)
+    result.push_back(1);
+    
+    // Code (2 bytes, little-endian)
+    result.push_back(ProtocolCodes::REGISTRATION_REQUEST & 0xFF);
+    result.push_back((ProtocolCodes::REGISTRATION_REQUEST >> 8) & 0xFF);
+    
+    // Payload size (2 bytes, little-endian)
+    uint16_t payload_size = static_cast<uint16_t>(payload.size());
+    result.push_back(payload_size & 0xFF);
+    result.push_back((payload_size >> 8) & 0xFF);
+    
+    // Checksum (4 bytes, little-endian)
+    result.push_back(checksum & 0xFF);
+    result.push_back((checksum >> 8) & 0xFF);
+    result.push_back((checksum >> 16) & 0xFF);
+    result.push_back((checksum >> 24) & 0xFF);
+    
+    // Add payload
     result.insert(result.end(), payload.begin(), payload.end());
     
     return result;
 }
 
 std::vector<uint8_t> ProtocolHandler::createLoginRequest(const std::string& username) {
-    // Create payload
+    // Create payload: username(255)
     std::vector<uint8_t> payload = packString(username, ProtocolSizes::USERNAME_SIZE);
     
     // Create header
     uint32_t checksum = calculateChecksum(payload);
-    ProtocolHeader header;
-    header.version = 1;
-    header.code = ProtocolCodes::LOGIN_REQUEST;
-    header.payload_size = static_cast<uint16_t>(payload.size());
-    header.payload_checksum = checksum;
     
-    // Serialize header and combine with payload
-    std::vector<uint8_t> header_bytes = serializeHeader(header);
-    std::vector<uint8_t> result = header_bytes;
+    std::vector<uint8_t> result;
+    
+    // Version (1 byte)
+    result.push_back(1);
+    
+    // Code (2 bytes, little-endian)
+    result.push_back(ProtocolCodes::LOGIN_REQUEST & 0xFF);
+    result.push_back((ProtocolCodes::LOGIN_REQUEST >> 8) & 0xFF);
+    
+    // Payload size (2 bytes, little-endian)
+    uint16_t payload_size = static_cast<uint16_t>(payload.size());
+    result.push_back(payload_size & 0xFF);
+    result.push_back((payload_size >> 8) & 0xFF);
+    
+    // Checksum (4 bytes, little-endian)
+    result.push_back(checksum & 0xFF);
+    result.push_back((checksum >> 8) & 0xFF);
+    result.push_back((checksum >> 16) & 0xFF);
+    result.push_back((checksum >> 24) & 0xFF);
+    
+    // Add payload
     result.insert(result.end(), payload.begin(), payload.end());
     
     return result;
 }
 
-std::vector<uint8_t> ProtocolHandler::createSendMessageRequest(const std::string& recipient, 
-                                                             const std::vector<uint8_t>& message) {
-    // Create payload
+std::vector<uint8_t> ProtocolHandler::createSendMessageRequest(const std::string& recipient, const std::vector<uint8_t>& message) {
+    // Create payload: recipient(255) + message_length(4) + message
     std::vector<uint8_t> payload;
     
-    // Recipient: 255 bytes
     auto recipient_bytes = packString(recipient, ProtocolSizes::USERNAME_SIZE);
     payload.insert(payload.end(), recipient_bytes.begin(), recipient_bytes.end());
     
-    // Message type: 1 byte
-    payload.push_back(0); // Default message type
-    
-    // Message length: 4 bytes (little-endian)
+    // Message length (4 bytes, little-endian)
     uint32_t message_length = static_cast<uint32_t>(message.size());
-    payload.push_back(static_cast<uint8_t>(message_length & 0xFF));
-    payload.push_back(static_cast<uint8_t>((message_length >> 8) & 0xFF));
-    payload.push_back(static_cast<uint8_t>((message_length >> 16) & 0xFF));
-    payload.push_back(static_cast<uint8_t>((message_length >> 24) & 0xFF));
+    payload.push_back(message_length & 0xFF);
+    payload.push_back((message_length >> 8) & 0xFF);
+    payload.push_back((message_length >> 16) & 0xFF);
+    payload.push_back((message_length >> 24) & 0xFF);
     
     // Message content
     payload.insert(payload.end(), message.begin(), message.end());
     
     // Create header
     uint32_t checksum = calculateChecksum(payload);
-    ProtocolHeader header;
-    header.version = 1;
-    header.code = ProtocolCodes::SEND_MESSAGE_REQUEST;
-    header.payload_size = static_cast<uint16_t>(payload.size());
-    header.payload_checksum = checksum;
     
-    // Serialize header and combine with payload
-    std::vector<uint8_t> header_bytes = serializeHeader(header);
-    std::vector<uint8_t> result = header_bytes;
+    std::vector<uint8_t> result;
+    
+    // Version (1 byte)
+    result.push_back(1);
+    
+    // Code (2 bytes, little-endian)
+    result.push_back(ProtocolCodes::SEND_MESSAGE_REQUEST & 0xFF);
+    result.push_back((ProtocolCodes::SEND_MESSAGE_REQUEST >> 8) & 0xFF);
+    
+    // Payload size (2 bytes, little-endian)
+    uint16_t payload_size = static_cast<uint16_t>(payload.size());
+    result.push_back(payload_size & 0xFF);
+    result.push_back((payload_size >> 8) & 0xFF);
+    
+    // Checksum (4 bytes, little-endian)
+    result.push_back(checksum & 0xFF);
+    result.push_back((checksum >> 8) & 0xFF);
+    result.push_back((checksum >> 16) & 0xFF);
+    result.push_back((checksum >> 24) & 0xFF);
+    
+    // Add payload
     result.insert(result.end(), payload.begin(), payload.end());
     
     return result;
 }
 
 std::vector<uint8_t> ProtocolHandler::createRequestMessagesRequest() {
-    // No payload for this request
+    // Empty payload
     std::vector<uint8_t> payload;
     
     // Create header
     uint32_t checksum = calculateChecksum(payload);
-    ProtocolHeader header;
-    header.version = 1;
-    header.code = ProtocolCodes::REQUEST_MESSAGES;
-    header.payload_size = 0;
-    header.payload_checksum = checksum;
     
-    // Serialize header
-    return serializeHeader(header);
+    std::vector<uint8_t> result;
+    
+    // Version (1 byte)
+    result.push_back(1);
+    
+    // Code (2 bytes, little-endian)
+    result.push_back(ProtocolCodes::REQUEST_MESSAGES & 0xFF);
+    result.push_back((ProtocolCodes::REQUEST_MESSAGES >> 8) & 0xFF);
+    
+    // Payload size (2 bytes, little-endian)
+    result.push_back(0);  // payload_size = 0
+    result.push_back(0);
+    
+    // Checksum (4 bytes, little-endian)
+    result.push_back(checksum & 0xFF);
+    result.push_back((checksum >> 8) & 0xFF);
+    result.push_back((checksum >> 16) & 0xFF);
+    result.push_back((checksum >> 24) & 0xFF);
+    
+    return result;
 }
 
 std::vector<uint8_t> ProtocolHandler::createRequestUsersRequest() {
-    // No payload for this request
+    // Empty payload
     std::vector<uint8_t> payload;
     
     // Create header
     uint32_t checksum = calculateChecksum(payload);
-    ProtocolHeader header;
-    header.version = 1;
-    header.code = ProtocolCodes::REQUEST_USERS;
-    header.payload_size = 0;
-    header.payload_checksum = checksum;
     
-    // Serialize header
-    return serializeHeader(header);
+    std::vector<uint8_t> result;
+    
+    // Version (1 byte)
+    result.push_back(1);
+    
+    // Code (2 bytes, little-endian)
+    result.push_back(ProtocolCodes::REQUEST_USERS & 0xFF);
+    result.push_back((ProtocolCodes::REQUEST_USERS >> 8) & 0xFF);
+    
+    // Payload size (2 bytes, little-endian)
+    result.push_back(0);  // payload_size = 0
+    result.push_back(0);
+    
+    // Checksum (4 bytes, little-endian)
+    result.push_back(checksum & 0xFF);
+    result.push_back((checksum >> 8) & 0xFF);
+    result.push_back((checksum >> 16) & 0xFF);
+    result.push_back((checksum >> 24) & 0xFF);
+    
+    return result;
 }
 
 std::vector<uint8_t> ProtocolHandler::createLogoutRequest() {
-    // No payload for this request
+    // Empty payload
     std::vector<uint8_t> payload;
     
     // Create header
     uint32_t checksum = calculateChecksum(payload);
-    ProtocolHeader header;
-    header.version = 1;
-    header.code = ProtocolCodes::LOGOUT_REQUEST;
-    header.payload_size = 0;
-    header.payload_checksum = checksum;
     
-    // Serialize header
-    return serializeHeader(header);
+    std::vector<uint8_t> result;
+    
+    // Version (1 byte)
+    result.push_back(1);
+    
+    // Code (2 bytes, little-endian)
+    result.push_back(ProtocolCodes::LOGOUT_REQUEST & 0xFF);
+    result.push_back((ProtocolCodes::LOGOUT_REQUEST >> 8) & 0xFF);
+    
+    // Payload size (2 bytes, little-endian)
+    result.push_back(0);  // payload_size = 0
+    result.push_back(0);
+    
+    // Checksum (4 bytes, little-endian)
+    result.push_back(checksum & 0xFF);
+    result.push_back((checksum >> 8) & 0xFF);
+    result.push_back((checksum >> 16) & 0xFF);
+    result.push_back((checksum >> 24) & 0xFF);
+    
+    return result;
 }
 
 bool ProtocolHandler::parseResponse(const std::vector<uint8_t>& data) {
-    // Parse response logic will be implemented here
-    return false;
+    // Store response for later parsing
+    receive_buffer_ = data;
+    return true;
 }
 
 bool ProtocolHandler::isRegistrationSuccess() const {
-    // Check if registration was successful
-    return false;
+    if (receive_buffer_.size() < 9) return false;
+    
+    // Parse code from header
+    uint16_t code = static_cast<uint16_t>(receive_buffer_[1]) | (static_cast<uint16_t>(receive_buffer_[2]) << 8);
+    return code == ProtocolCodes::REGISTRATION_SUCCESS;
 }
 
 bool ProtocolHandler::isLoginSuccess() const {
-    // Check if login was successful
-    return false;
+    if (receive_buffer_.size() < 9) return false;
+    
+    uint16_t code = static_cast<uint16_t>(receive_buffer_[1]) | (static_cast<uint16_t>(receive_buffer_[2]) << 8);
+    return code == ProtocolCodes::LOGIN_SUCCESS;
 }
 
 bool ProtocolHandler::isMessageReceived() const {
-    // Check if message was received
-    return false;
+    if (receive_buffer_.size() < 9) return false;
+    
+    uint16_t code = static_cast<uint16_t>(receive_buffer_[1]) | (static_cast<uint16_t>(receive_buffer_[2]) << 8);
+    return code == ProtocolCodes::MESSAGES_RESPONSE;
 }
 
 bool ProtocolHandler::isUsersListReceived() const {
-    // Check if users list was received
-    return false;
+    if (receive_buffer_.size() < 9) return false;
+    
+    uint16_t code = static_cast<uint16_t>(receive_buffer_[1]) | (static_cast<uint16_t>(receive_buffer_[2]) << 8);
+    return code == ProtocolCodes::USERS_RESPONSE;
 }
 
 std::string ProtocolHandler::getErrorMessage() const {
-    // Get error message from response
-    return "";
+    if (receive_buffer_.size() < 9) return "";
+    
+    // Extract payload
+    uint16_t payload_size = static_cast<uint16_t>(receive_buffer_[3]) | (static_cast<uint16_t>(receive_buffer_[4]) << 8);
+    if (receive_buffer_.size() < 9 + payload_size) return "";
+    
+    std::string error_msg;
+    for (size_t i = 9; i < 9 + payload_size; i++) {
+        error_msg += static_cast<char>(receive_buffer_[i]);
+    }
+    return error_msg;
 }
 
 std::vector<std::string> ProtocolHandler::getUsersList() const {
-    // Get users list from response
-    return std::vector<std::string>();
+    // Placeholder implementation
+    return {};
 }
 
 std::vector<std::pair<std::string, std::vector<uint8_t>>> ProtocolHandler::getMessages() const {
-    // Get messages from response
-    return std::vector<std::pair<std::string, std::vector<uint8_t>>>();
+    // Placeholder implementation
+    return {};
+}
+
+std::vector<uint8_t> ProtocolHandler::packString(const std::string& str, size_t fixed_size) {
+    std::vector<uint8_t> result(fixed_size, 0);
+    size_t copy_size = std::min(str.length(), fixed_size);
+    std::memcpy(result.data(), str.c_str(), copy_size);
+    return result;
+}
+
+std::string ProtocolHandler::unpackString(const std::vector<uint8_t>& data, size_t offset, size_t fixed_size) {
+    if (offset + fixed_size > data.size()) return "";
+    
+    std::string result;
+    for (size_t i = offset; i < offset + fixed_size; i++) {
+        if (data[i] == 0) break;
+        result += static_cast<char>(data[i]);
+    }
+    return result;
 }
 
 uint32_t ProtocolHandler::calculateChecksum(const std::vector<uint8_t>& data) {
@@ -192,69 +299,4 @@ uint32_t ProtocolHandler::calculateChecksum(const std::vector<uint8_t>& data) {
         checksum += byte;
     }
     return checksum;
-}
-
-bool ProtocolHandler::validateHeader(const ProtocolHeader& header) {
-    // Validate protocol header
-    return header.version == 1 && header.payload_size <= 65535;
-}
-
-std::vector<uint8_t> ProtocolHandler::serializeHeader(const ProtocolHeader& header) {
-    std::vector<uint8_t> result;
-    
-    // Version: 1 byte
-    result.push_back(header.version);
-    
-    // Code: 1 byte
-    result.push_back(header.code);
-    
-    // Payload size: 2 bytes (little-endian)
-    result.push_back(static_cast<uint8_t>(header.payload_size & 0xFF));
-    result.push_back(static_cast<uint8_t>((header.payload_size >> 8) & 0xFF));
-    
-    // Checksum: 4 bytes (little-endian)
-    result.push_back(static_cast<uint8_t>(header.payload_checksum & 0xFF));
-    result.push_back(static_cast<uint8_t>((header.payload_checksum >> 8) & 0xFF));
-    result.push_back(static_cast<uint8_t>((header.payload_checksum >> 16) & 0xFF));
-    result.push_back(static_cast<uint8_t>((header.payload_checksum >> 24) & 0xFF));
-    
-    return result;
-}
-
-bool ProtocolHandler::deserializeHeader(const std::vector<uint8_t>& data, ProtocolHeader& header) {
-    if (data.size() < ProtocolSizes::HEADER_SIZE) {
-        return false;
-    }
-    
-    header.version = data[0];
-    header.code = data[1];
-    header.payload_size = static_cast<uint16_t>(data[2]) | (static_cast<uint16_t>(data[3]) << 8);
-    header.payload_checksum = static_cast<uint32_t>(data[4]) |
-                             (static_cast<uint32_t>(data[5]) << 8) |
-                             (static_cast<uint32_t>(data[6]) << 16) |
-                             (static_cast<uint32_t>(data[7]) << 24);
-    
-    return true;
-}
-
-std::vector<uint8_t> ProtocolHandler::packString(const std::string& str, size_t fixed_size) {
-    std::vector<uint8_t> result(fixed_size, 0);
-    size_t copy_size = std::min(str.length(), fixed_size);
-    std::copy(str.begin(), str.begin() + copy_size, result.begin());
-    return result;
-}
-
-std::string ProtocolHandler::unpackString(const std::vector<uint8_t>& data, size_t offset, size_t fixed_size) {
-    if (offset + fixed_size > data.size()) {
-        return "";
-    }
-    
-    std::string result;
-    for (size_t i = 0; i < fixed_size; ++i) {
-        if (data[offset + i] == 0) {
-            break;
-        }
-        result += static_cast<char>(data[offset + i]);
-    }
-    return result;
 } 
