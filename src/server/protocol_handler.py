@@ -110,4 +110,31 @@ class ProtocolHandler:
         else:
             # Failure: error message
             payload = message.encode('utf-8')
-            return self.create_response(ProtocolCodes.REGISTRATION_FAILURE, payload)  # Using REGISTRATION_FAILURE for errors 
+            return self.create_response(ProtocolCodes.REGISTRATION_FAILURE, payload)  # Using REGISTRATION_FAILURE for errors
+    
+    def create_messages_response(self, messages: List[Dict[str, Any]]) -> bytes:
+        """Create messages response for waiting messages."""
+        # Format: number_of_messages(4) + for each message: from_client_id(16) + message_id(4) + message_type(1) + content_size(4) + content
+        result = struct.pack('<I', len(messages))  # Number of messages (4 bytes)
+        
+        for message in messages:
+            # From client ID (16 bytes, padded with nulls)
+            from_client_id = message.get('from_client_id', '')[:16].ljust(16, '\0')
+            result += from_client_id.encode('utf-8')
+            
+            # Message ID (4 bytes, little-endian)
+            message_id = message.get('id', 0)
+            result += struct.pack('<I', message_id)
+            
+            # Message type (1 byte)
+            message_type = message.get('message_type', 0)
+            result += struct.pack('<B', message_type)
+            
+            # Content (variable length)
+            content = message.get('content', '')
+            content_bytes = content.encode('utf-8')
+            content_size = len(content_bytes)
+            result += struct.pack('<I', content_size)  # Content size (4 bytes, little-endian)
+            result += content_bytes
+        
+        return self.create_response(ProtocolCodes.MESSAGES_RESPONSE, result) 

@@ -65,12 +65,14 @@ public:
     bool isMessageReceived() const;
     bool isUsersListReceived() const;
     bool isPublicKeyReceived() const;
+    bool isMessagesReceived() const;
     
     // Data extraction
     std::string getErrorMessage() const;
     std::vector<std::string> getUsersList() const;
     std::vector<std::pair<std::string, std::vector<uint8_t>>> getMessages() const;
     std::pair<std::string, std::string> getPublicKeyData() const;  // Returns (client_id, public_key)
+    std::vector<std::tuple<std::string, uint32_t, uint8_t, std::string>> getMessagesData() const;  // Returns (from_client_id, message_id, message_type, content)
 };
 
 #endif // PROTOCOL_HANDLER_H 

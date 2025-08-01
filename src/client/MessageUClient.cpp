@@ -412,8 +412,78 @@ void MessageUClient::getWaitingMessages() {
         std::cout << "Must register first before getting waiting messages." << std::endl;
         return;
     }
-    std::cout << "Selected: Get waiting messages" << std::endl;
-    // Waiting messages logic will be implemented here
+    
+    std::cout << "=== Get Waiting Messages ===" << std::endl;
+    
+    // Create request for waiting messages
+    std::vector<uint8_t> request = protocol_.createRequestMessagesRequest();
+    
+    // Connect to server
+    if (!network_.connect(server_ip_, server_port_)) {
+        std::cout << "Failed to connect to server." << std::endl;
+        return;
+    }
+    
+    std::cout << "Connected to server. Sending waiting messages request..." << std::endl;
+    
+    // Send request
+    if (!network_.sendData(request)) {
+        std::cout << "Failed to send waiting messages request." << std::endl;
+        network_.disconnect();
+        return;
+    }
+    
+    // Receive response
+    std::vector<uint8_t> response;
+    if (!network_.receiveData(response)) {
+        std::cout << "Failed to receive waiting messages response." << std::endl;
+        network_.disconnect();
+        return;
+    }
+    
+    // Parse response
+    if (!protocol_.parseResponse(response)) {
+        std::cout << "Invalid response format." << std::endl;
+        network_.disconnect();
+        return;
+    }
+    
+    if (protocol_.isMessagesReceived()) {
+        // Extract messages data
+        auto messages = protocol_.getMessagesData();
+        
+        if (!messages.empty()) {
+            std::cout << "\nWaiting Messages:" << std::endl;
+            std::cout << "=================" << std::endl;
+            
+            for (size_t i = 0; i < messages.size(); i++) {
+                auto message_data = messages[i];
+                std::string from_client_id = std::get<0>(message_data);
+                uint32_t message_id = std::get<1>(message_data);
+                uint8_t message_type = std::get<2>(message_data);
+                std::string content = std::get<3>(message_data);
+                
+                std::cout << "Message " << (i + 1) << ":" << std::endl;
+                std::cout << "  From: " << from_client_id << std::endl;
+                std::cout << "  ID: " << message_id << std::endl;
+                std::cout << "  Type: " << static_cast<int>(message_type) << std::endl;
+                std::cout << "  Content: " << content << std::endl;
+                std::cout << "  ---" << std::endl;
+            }
+            std::cout << "=================" << std::endl;
+        } else {
+            std::cout << "No waiting messages." << std::endl;
+        }
+    } else {
+        std::string error_msg = protocol_.getErrorMessage();
+        if (!error_msg.empty()) {
+            std::cout << "Failed to get waiting messages: " << error_msg << std::endl;
+        } else {
+            std::cout << "Failed to get waiting messages: Unknown error" << std::endl;
+        }
+    }
+    
+    network_.disconnect();
 }
 
 void MessageUClient::sendMessage() {

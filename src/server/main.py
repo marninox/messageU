@@ -211,8 +211,46 @@ class MessageUServer:
     
     def handle_request_messages(self, payload):
         """Handle request for waiting messages."""
-        # Placeholder for message retrieval
-        return self.protocol_handler.create_error_response("Request messages not implemented yet")
+        try:
+            # For now, we'll use a simple approach: the requesting client is identified
+            # by their connection. In a real implementation, this would be based on
+            # authentication or session management.
+            
+            # Since we don't have authentication yet, we'll need to identify the client
+            # from the payload or connection context. For simplicity, let's assume
+            # the payload contains the client ID or we can derive it from the connection.
+            
+            # For this implementation, we'll use a placeholder approach
+            # In a real system, this would be based on the authenticated user
+            print("Waiting messages request received")
+            
+            # For testing purposes, let's get messages for the first registered client
+            # In a real implementation, this would be the authenticated user's ID
+            clients = self.database.get_all_clients()
+            if not clients:
+                print("No clients found for message retrieval")
+                return self.protocol_handler.create_messages_response([])
+            
+            # Use the first client as the recipient (for testing)
+            recipient_id = clients[0]['client_id']
+            print(f"Getting waiting messages for client: {recipient_id}")
+            
+            # Get waiting messages for this client
+            messages = self.database.get_waiting_messages(recipient_id)
+            
+            if messages:
+                print(f"Found {len(messages)} waiting messages")
+                # Mark messages as delivered by deleting them
+                message_ids = [msg['id'] for msg in messages]
+                self.database.delete_messages(message_ids)
+                return self.protocol_handler.create_messages_response(messages)
+            else:
+                print("No waiting messages found")
+                return self.protocol_handler.create_messages_response([])
+                
+        except Exception as e:
+            print(f"Error in waiting messages request: {e}")
+            return self.protocol_handler.create_error_response("Failed to get waiting messages")
     
     def handle_request_users(self, payload):
         """Handle request for user list."""

@@ -152,6 +152,51 @@ class DatabaseHandler:
             print(f"Database error getting client by identifier: {e}")
             return None
     
+    def get_waiting_messages(self, to_client_id: str) -> List[Dict[str, Any]]:
+        """Get all waiting messages for a client."""
+        try:
+            conn = self._get_connection()
+            cursor = conn.cursor()
+            cursor.execute('''
+                SELECT id, from_client_id, to_client_id, message_type, content, created_at
+                FROM messages WHERE to_client_id = ?
+                ORDER BY created_at ASC
+            ''', (to_client_id,))
+            rows = cursor.fetchall()
+            return [
+                {
+                    'id': row[0],
+                    'from_client_id': row[1],
+                    'to_client_id': row[2],
+                    'message_type': row[3],
+                    'content': row[4],
+                    'created_at': row[5]
+                }
+                for row in rows
+            ]
+        except sqlite3.Error as e:
+            print(f"Database error getting waiting messages: {e}")
+            return []
+    
+    def delete_messages(self, message_ids: List[int]) -> bool:
+        """Delete messages by their IDs (mark as delivered)."""
+        if not message_ids:
+            return True
+            
+        try:
+            conn = self._get_connection()
+            cursor = conn.cursor()
+            placeholders = ','.join(['?' for _ in message_ids])
+            cursor.execute(f'''
+                DELETE FROM messages WHERE id IN ({placeholders})
+            ''', message_ids)
+            conn.commit()
+            print(f"Deleted {len(message_ids)} messages")
+            return True
+        except sqlite3.Error as e:
+            print(f"Database error deleting messages: {e}")
+            return False
+    
     def update_last_seen(self, client_id: str):
         """Update the last_seen timestamp for a client."""
         try:

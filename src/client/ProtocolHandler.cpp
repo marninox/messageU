@@ -291,6 +291,13 @@ bool ProtocolHandler::isPublicKeyReceived() const {
     return code == ProtocolCodes::PUBLIC_KEY_RESPONSE;
 }
 
+bool ProtocolHandler::isMessagesReceived() const {
+    if (receive_buffer_.size() < 9) return false;
+    
+    uint16_t code = static_cast<uint16_t>(receive_buffer_[1]) | (static_cast<uint16_t>(receive_buffer_[2]) << 8);
+    return code == ProtocolCodes::MESSAGES_RESPONSE;
+}
+
 std::string ProtocolHandler::getErrorMessage() const {
     if (receive_buffer_.size() < 9) return "";
     
@@ -360,6 +367,68 @@ std::pair<std::string, std::string> ProtocolHandler::getPublicKeyData() const {
     std::string public_key = unpackString(receive_buffer_, 9 + 16, 160);
     
     return {client_id, public_key};
+}
+
+std::vector<std::tuple<std::string, uint32_t, uint8_t, std::string>> ProtocolHandler::getMessagesData() const {
+    if (receive_buffer_.size() < 9) return {};
+    
+    // Extract payload
+    uint16_t payload_size = static_cast<uint16_t>(receive_buffer_[3]) | (static_cast<uint16_t>(receive_buffer_[4]) << 8);
+    if (receive_buffer_.size() < 9 + payload_size) return {};
+    
+    std::vector<std::tuple<std::string, uint32_t, uint8_t, std::string>> messages;
+    
+    // Parse number of messages (4 bytes)
+    if (payload_size < 4) return {};
+    uint32_t num_messages = static_cast<uint32_t>(receive_buffer_[9]) |
+                           (static_cast<uint32_t>(receive_buffer_[10]) << 8) |
+                           (static_cast<uint32_t>(receive_buffer_[11]) << 16) |
+                           (static_cast<uint32_t>(receive_buffer_[12]) << 24);
+    
+    size_t offset = 13;  // Start after number of messages
+    
+    // Parse each message: from_client_id(16) + message_id(4) + message_type(1) + content_size(4) + content
+    for (uint32_t i = 0; i < num_messages; i++) {
+        if (offset + 16 + 4 + 1 + 4 > receive_buffer_.size()) break;
+        
+        // Extract from client ID (16 bytes)
+        std::string from_client_id = unpackString(receive_buffer_, offset, 16);
+        offset += 16;
+        
+        // Extract message ID (4 bytes)
+        if (offset + 4 > receive_buffer_.size()) break;
+        uint32_t message_id = static_cast<uint32_t>(receive_buffer_[offset]) |
+                             (static_cast<uint32_t>(receive_buffer_[offset + 1]) << 8) |
+                             (static_cast<uint32_t>(receive_buffer_[offset + 2]) << 16) |
+                             (static_cast<uint32_t>(receive_buffer_[offset + 3]) << 24);
+        offset += 4;
+        
+        // Extract message type (1 byte)
+        if (offset >= receive_buffer_.size()) break;
+        uint8_t message_type = receive_buffer_[offset];
+        offset += 1;
+        
+        // Extract content size (4 bytes)
+        if (offset + 4 > receive_buffer_.size()) break;
+        uint32_t content_size = static_cast<uint32_t>(receive_buffer_[offset]) |
+                               (static_cast<uint32_t>(receive_buffer_[offset + 1]) << 8) |
+                               (static_cast<uint32_t>(receive_buffer_[offset + 2]) << 16) |
+                               (static_cast<uint32_t>(receive_buffer_[offset + 3]) << 24);
+        offset += 4;
+        
+        // Extract content
+        if (offset + content_size > receive_buffer_.size()) break;
+        std::string content;
+        for (uint32_t j = 0; j < content_size; j++) {
+            content += static_cast<char>(receive_buffer_[offset + j]);
+        }
+        offset += content_size;
+        
+        // Add message to list
+        messages.push_back(std::make_tuple(from_client_id, message_id, message_type, content));
+    }
+    
+    return messages;
 }
 
 std::vector<std::pair<std::string, std::vector<uint8_t>>> ProtocolHandler::getMessages() const {
