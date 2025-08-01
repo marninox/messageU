@@ -1,6 +1,9 @@
-# MessageU - End-to-End Encrypted Messaging System
+# MessageU - End-to-End Encrypted Messaging System - by Illy Marnin
 
 A secure client-server messaging application with end-to-end encryption.
+**developed over MAC (but all .py/.cpp/.h files available to be compiled on any system)
+**requests 151 and 152 from the manu happens automatically in my system, 
+therefore not needed to be manulay pressed by the client
 
 ## Features
 

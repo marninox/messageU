@@ -44,7 +44,7 @@ void MessageUClient::run() {
             continue;
         }
         
-        if (choice == 6) { // Exit
+        if (choice == 0) { // Exit
             exitClient();
             break;
         }
@@ -135,34 +135,37 @@ bool MessageUClient::loadClientConfig() {
 
 void MessageUClient::showMenu() {
     std::cout << "\n=== MessageU Client Menu ===" << std::endl;
-    std::cout << "1. Register" << std::endl;
-    std::cout << "2. Request client list" << std::endl;
-    std::cout << "3. Get public key" << std::endl;
-    std::cout << "4. Get waiting messages" << std::endl;
-    std::cout << "5. Send message" << std::endl;
-    std::cout << "6. Exit" << std::endl;
+    std::cout << "110) Register" << std::endl;
+    std::cout << "120) Request for clients list" << std::endl;
+    std::cout << "130) Request for public key" << std::endl;
+    std::cout << "140) Request for waiting messages" << std::endl;
+    std::cout << "150) Send a text message" << std::endl;
+    std::cout << "0) Exit client" << std::endl;
     std::cout << "===========================" << std::endl;
 }
 
 void MessageUClient::handleMenuChoice(int choice) {
     switch (choice) {
-        case 1:
+        case 110:
             registerUser();
             break;
-        case 2:
+        case 120:
             requestClientList();
             break;
-        case 3:
+        case 130:
             getPublicKey();
             break;
-        case 4:
+        case 140:
             getWaitingMessages();
             break;
-        case 5:
+        case 150:
             sendMessage();
             break;
+        case 0:
+            exitClient();
+            break;
         default:
-            std::cout << "Invalid choice. Please select 1-6." << std::endl;
+            std::cout << "Invalid choice. Please select 110, 120, 130, 140, 150, or 0." << std::endl;
             break;
     }
 }
@@ -513,6 +516,7 @@ void MessageUClient::getWaitingMessages() {
                 uint32_t message_id = std::get<1>(message_data);
                 uint8_t message_type = std::get<2>(message_data);
                 std::string content = std::get<3>(message_data);
+                std::string sender_name = std::get<4>(message_data);
                 
                 if (message_type == 1) { // Regular message
                     // Convert content string to bytes for decryption
@@ -544,7 +548,7 @@ void MessageUClient::getWaitingMessages() {
                     }
                     
                     std::cout << "Message " << (i + 1) << ":" << std::endl;
-                    std::cout << "  From: " << from_client_id << std::endl;
+                    std::cout << "  From: " << sender_name << std::endl;
                     std::cout << "  ID: " << message_id << std::endl;
                     std::cout << "  Type: " << static_cast<int>(message_type) << std::endl;
                     std::cout << "  Content: " << decrypted_content << std::endl;
