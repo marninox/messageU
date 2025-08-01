@@ -206,8 +206,62 @@ class MessageUServer:
     
     def handle_send_message_request(self, payload):
         """Handle send message request."""
-        # Placeholder for message sending
-        return self.protocol_handler.create_error_response("Send message not implemented yet")
+        try:
+            # Parse send message data from payload
+            # Format: recipient(255) + message_length(4) + message_content
+            if len(payload) < 259:  # recipient(255) + message_length(4)
+                return self.protocol_handler.create_error_response("Invalid send message payload")
+            
+            recipient_bytes = payload[:255]
+            recipient = recipient_bytes.rstrip(b'\0').decode('utf-8')
+            
+            if not recipient:
+                return self.protocol_handler.create_error_response("Empty recipient")
+            
+            # Parse message length (4 bytes, little-endian)
+            message_length = int.from_bytes(payload[255:259], byteorder='little')
+            
+            if len(payload) < 259 + message_length:
+                return self.protocol_handler.create_error_response("Invalid message content length")
+            
+            # Parse message content
+            message_content = payload[259:259 + message_length].decode('utf-8')
+            
+            print(f"Send message request: from <unknown> to {recipient}")
+            print(f"Message content: {message_content}")
+            
+            # Validate that recipient exists
+            recipient_client = self.database.get_client_by_identifier(recipient)
+            if not recipient_client:
+                print(f"Recipient not found: {recipient}")
+                return self.protocol_handler.create_send_message_response(
+                    False, 
+                    f"Recipient '{recipient}' not found"
+                )
+            
+            print(f"Recipient found: {recipient_client['name']} (ID: {recipient_client['client_id']})")
+            
+            # For now, use a placeholder sender ID since we don't have authentication
+            # In a real implementation, this would be the authenticated user's ID
+            sender_id = "unknown_sender"
+            
+            # Store the message in the database
+            if self.database.store_message(sender_id, recipient_client['client_id'], 1, message_content):
+                print(f"Message stored successfully for {recipient_client['name']}")
+                return self.protocol_handler.create_send_message_response(
+                    True, 
+                    f"Message sent successfully to {recipient_client['name']}"
+                )
+            else:
+                print("Failed to store message in database")
+                return self.protocol_handler.create_send_message_response(
+                    False, 
+                    "Failed to store message"
+                )
+                
+        except Exception as e:
+            print(f"Error in send message request: {e}")
+            return self.protocol_handler.create_error_response("Failed to send message")
     
     def handle_request_messages(self, payload):
         """Handle request for waiting messages."""

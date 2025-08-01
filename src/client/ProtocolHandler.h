@@ -66,6 +66,7 @@ public:
     bool isUsersListReceived() const;
     bool isPublicKeyReceived() const;
     bool isMessagesReceived() const;
+    bool isSendMessageSuccess() const;
     
     // Data extraction
     std::string getErrorMessage() const;

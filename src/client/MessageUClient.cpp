@@ -491,8 +491,83 @@ void MessageUClient::sendMessage() {
         std::cout << "Must register first before sending messages." << std::endl;
         return;
     }
-    std::cout << "Selected: Send message" << std::endl;
-    // Send message logic will be implemented here
+    
+    std::cout << "=== Send Message ===" << std::endl;
+    
+    // Get recipient from user
+    std::string recipient;
+    std::cout << "Enter recipient ID or nickname: ";
+    std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n'); // Clear buffer
+    std::getline(std::cin, recipient);
+    
+    if (recipient.empty()) {
+        std::cout << "Recipient cannot be empty." << std::endl;
+        return;
+    }
+    
+    // Get message content from user
+    std::string message_content;
+    std::cout << "Enter message content: ";
+    std::getline(std::cin, message_content);
+    
+    if (message_content.empty()) {
+        std::cout << "Message content cannot be empty." << std::endl;
+        return;
+    }
+    
+    // Convert message content to bytes
+    std::vector<uint8_t> message_bytes(message_content.begin(), message_content.end());
+    
+    // Create send message request
+    std::vector<uint8_t> request = protocol_.createSendMessageRequest(recipient, message_bytes);
+    
+    // Connect to server
+    if (!network_.connect(server_ip_, server_port_)) {
+        std::cout << "Failed to connect to server." << std::endl;
+        return;
+    }
+    
+    std::cout << "Connected to server. Sending message..." << std::endl;
+    
+    // Send request
+    if (!network_.sendData(request)) {
+        std::cout << "Failed to send message request." << std::endl;
+        network_.disconnect();
+        return;
+    }
+    
+    // Receive response
+    std::vector<uint8_t> response;
+    if (!network_.receiveData(response)) {
+        std::cout << "Failed to receive send message response." << std::endl;
+        network_.disconnect();
+        return;
+    }
+    
+    // Parse response
+    if (!protocol_.parseResponse(response)) {
+        std::cout << "Invalid response format." << std::endl;
+        network_.disconnect();
+        return;
+    }
+    
+    if (protocol_.isSendMessageSuccess()) {
+        std::string success_msg = protocol_.getErrorMessage(); // This actually gets the success message
+        if (!success_msg.empty()) {
+            std::cout << "✓ " << success_msg << std::endl;
+        } else {
+            std::cout << "✓ Message sent successfully!" << std::endl;
+        }
+    } else {
+        std::string error_msg = protocol_.getErrorMessage();
+        if (!error_msg.empty()) {
+            std::cout << "✗ Failed to send message: " << error_msg << std::endl;
+        } else {
+            std::cout << "✗ Failed to send message: Unknown error" << std::endl;
+        }
+    }
+    
+    network_.disconnect();
 }
 
 void MessageUClient::sendFile() {

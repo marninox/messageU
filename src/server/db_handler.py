@@ -197,6 +197,22 @@ class DatabaseHandler:
             print(f"Database error deleting messages: {e}")
             return False
     
+    def store_message(self, from_client_id: str, to_client_id: str, message_type: int, content: str) -> bool:
+        """Store a new message in the database."""
+        try:
+            conn = self._get_connection()
+            cursor = conn.cursor()
+            cursor.execute('''
+                INSERT INTO messages (from_client_id, to_client_id, message_type, content)
+                VALUES (?, ?, ?, ?)
+            ''', (from_client_id, to_client_id, message_type, content))
+            conn.commit()
+            print(f"Message stored: from {from_client_id} to {to_client_id}")
+            return True
+        except sqlite3.Error as e:
+            print(f"Database error storing message: {e}")
+            return False
+    
     def update_last_seen(self, client_id: str):
         """Update the last_seen timestamp for a client."""
         try:

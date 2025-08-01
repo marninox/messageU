@@ -298,6 +298,13 @@ bool ProtocolHandler::isMessagesReceived() const {
     return code == ProtocolCodes::MESSAGES_RESPONSE;
 }
 
+bool ProtocolHandler::isSendMessageSuccess() const {
+    if (receive_buffer_.size() < 9) return false;
+    
+    uint16_t code = static_cast<uint16_t>(receive_buffer_[1]) | (static_cast<uint16_t>(receive_buffer_[2]) << 8);
+    return code == ProtocolCodes::SEND_MESSAGE_SUCCESS;
+}
+
 std::string ProtocolHandler::getErrorMessage() const {
     if (receive_buffer_.size() < 9) return "";
     

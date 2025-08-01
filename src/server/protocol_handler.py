@@ -137,4 +137,15 @@ class ProtocolHandler:
             result += struct.pack('<I', content_size)  # Content size (4 bytes, little-endian)
             result += content_bytes
         
-        return self.create_response(ProtocolCodes.MESSAGES_RESPONSE, result) 
+        return self.create_response(ProtocolCodes.MESSAGES_RESPONSE, result)
+    
+    def create_send_message_response(self, success: bool, message: str = "") -> bytes:
+        """Create send message response."""
+        if success:
+            # Success: confirmation message
+            payload = message.encode('utf-8')
+            return self.create_response(ProtocolCodes.SEND_MESSAGE_SUCCESS, payload)
+        else:
+            # Failure: error message
+            payload = message.encode('utf-8')
+            return self.create_response(ProtocolCodes.SEND_MESSAGE_FAILURE, payload) 
