@@ -183,19 +183,32 @@ class DatabaseHandler:
         if not message_ids:
             return True
             
-        try:
-            conn = self._get_connection()
-            cursor = conn.cursor()
-            placeholders = ','.join(['?' for _ in message_ids])
-            cursor.execute(f'''
-                DELETE FROM messages WHERE id IN ({placeholders})
-            ''', message_ids)
-            conn.commit()
-            print(f"Deleted {len(message_ids)} messages")
-            return True
-        except sqlite3.Error as e:
-            print(f"Database error deleting messages: {e}")
-            return False
+        max_retries = 3
+        for attempt in range(max_retries):
+            try:
+                conn = self._get_connection()
+                cursor = conn.cursor()
+                placeholders = ','.join(['?' for _ in message_ids])
+                cursor.execute(f'''
+                    DELETE FROM messages WHERE id IN ({placeholders})
+                ''', message_ids)
+                conn.commit()
+                print(f"Deleted {len(message_ids)} messages")
+                return True
+            except sqlite3.OperationalError as e:
+                if "database is locked" in str(e) and attempt < max_retries - 1:
+                    print(f"Database locked, retrying... (attempt {attempt + 1}/{max_retries})")
+                    import time
+                    time.sleep(0.1)  # Wait 100ms before retry
+                    continue
+                else:
+                    print(f"Database error deleting messages: {e}")
+                    return False
+            except sqlite3.Error as e:
+                print(f"Database error deleting messages: {e}")
+                return False
+        
+        return False
     
     def store_message(self, from_client_id: str, to_client_id: str, message_type: int, content: str) -> bool:
         """Store a new message in the database."""

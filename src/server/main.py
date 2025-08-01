@@ -11,7 +11,7 @@ import os
 from client import ClientConnection, ClientManager
 from message import Message, MessageManager, MessageFormatter
 from db_handler import DatabaseHandler
-from protocol_handler import ProtocolHandler
+from protocol_handler import ProtocolHandler, ProtocolCodes
 import struct
 
 # Add the server directory to the path for imports
@@ -228,26 +228,34 @@ class MessageUServer:
         """Handle send message request."""
         try:
             # Parse send message data from payload
-            # Format: recipient(255) + message_length(4) + message_content
-            if len(payload) < 259:  # recipient(255) + message_length(4)
+            # Format: sender_id(16) + recipient(255) + message_length(4) + message_content
+            if len(payload) < 275:  # sender_id(16) + recipient(255) + message_length(4)
                 return self.protocol_handler.create_error_response("Invalid send message payload")
             
-            recipient_bytes = payload[:255]
+            # Parse sender ID (16 bytes)
+            sender_id_bytes = payload[:16]
+            sender_id = sender_id_bytes.rstrip(b'\0').decode('utf-8')
+            
+            # Parse recipient (255 bytes)
+            recipient_bytes = payload[16:271]
             recipient = recipient_bytes.rstrip(b'\0').decode('utf-8')
             
             if not recipient:
                 return self.protocol_handler.create_error_response("Empty recipient")
             
             # Parse message length (4 bytes, little-endian)
-            message_length = int.from_bytes(payload[255:259], byteorder='little')
+            message_length = int.from_bytes(payload[271:275], byteorder='little')
             
-            if len(payload) < 259 + message_length:
+            if len(payload) < 275 + message_length:
                 return self.protocol_handler.create_error_response("Invalid message content length")
             
-            # Parse message content
-            message_content = payload[259:259 + message_length].decode('utf-8')
+            # Parse message content (binary data, not UTF-8 text)
+            message_content_bytes = payload[275:275 + message_length]
+            # Convert binary data to base64 string for storage to preserve binary data
+            import base64
+            message_content = base64.b64encode(message_content_bytes).decode('ascii')
             
-            print(f"Send message request: from <unknown> to {recipient}")
+            print(f"Send message request: from {sender_id} to {recipient}")
             print(f"Message content: {message_content}")
             
             # Validate that recipient exists
@@ -261,11 +269,7 @@ class MessageUServer:
             
             print(f"Recipient found: {recipient_client['name']} (ID: {recipient_client['client_id']})")
             
-            # For now, use a placeholder sender ID since we don't have authentication
-            # In a real implementation, this would be the authenticated user's ID
-            sender_id = "unknown_sender"
-            
-            # Store the message in the database
+            # Store the message in the database with actual sender ID
             if self.database.store_message(sender_id, recipient_client['client_id'], 1, message_content):
                 print(f"Message stored successfully for {recipient_client['name']}")
                 return self.protocol_handler.create_send_message_response(
@@ -286,40 +290,28 @@ class MessageUServer:
     def handle_request_messages(self, payload):
         """Handle request for waiting messages."""
         try:
-            # For now, we'll use a simple approach: the requesting client is identified
-            # by their connection. In a real implementation, this would be based on
-            # authentication or session management.
+            # Parse waiting messages request
+            # Format: client_id(16) - the requesting client's ID
+            if len(payload) < 16:
+                return self.protocol_handler.create_error_response("Invalid waiting messages request")
             
-            # Since we don't have authentication yet, we'll need to identify the client
-            # from the payload or connection context. For simplicity, let's assume
-            # the payload contains the client ID or we can derive it from the connection.
+            # Parse client ID (16 bytes)
+            client_id_bytes = payload[:16]
+            client_id = client_id_bytes.rstrip(b'\0').decode('utf-8')
             
-            # For this implementation, we'll use a placeholder approach
-            # In a real system, this would be based on the authenticated user
-            print("Waiting messages request received")
+            print(f"Waiting messages request received from client: {client_id}")
             
-            # For testing purposes, let's get messages for the first registered client
-            # In a real implementation, this would be the authenticated user's ID
-            clients = self.database.get_all_clients()
-            if not clients:
-                print("No clients found for message retrieval")
-                return self.protocol_handler.create_messages_response([])
-            
-            # Use the first client as the recipient (for testing)
-            recipient_id = clients[0]['client_id']
-            print(f"Getting waiting messages for client: {recipient_id}")
-            
-            # Get waiting messages for this client
-            messages = self.database.get_waiting_messages(recipient_id)
+            # Get waiting messages for this specific client
+            messages = self.database.get_waiting_messages(client_id)
             
             if messages:
-                print(f"Found {len(messages)} waiting messages")
+                print(f"Found {len(messages)} waiting messages for {client_id}")
                 # Mark messages as delivered by deleting them
                 message_ids = [msg['id'] for msg in messages]
                 self.database.delete_messages(message_ids)
                 return self.protocol_handler.create_messages_response(messages)
             else:
-                print("No waiting messages found")
+                print(f"No waiting messages found for {client_id}")
                 return self.protocol_handler.create_messages_response([])
                 
         except Exception as e:
@@ -386,26 +378,31 @@ class MessageUServer:
         """Handle symmetric key exchange request."""
         try:
             # Parse symmetric key data from payload
-            # Format: recipient(255) + key_length(4) + encrypted_key
-            if len(payload) < 259:  # recipient(255) + key_length(4)
+            # Format: sender_id(16) + recipient(255) + key_length(4) + encrypted_key
+            if len(payload) < 275:  # sender_id(16) + recipient(255) + key_length(4)
                 return self.protocol_handler.create_error_response("Invalid symmetric key request payload")
             
-            recipient_bytes = payload[:255]
+            # Parse sender ID (16 bytes)
+            sender_id_bytes = payload[:16]
+            sender_id = sender_id_bytes.rstrip(b'\0').decode('utf-8')
+            
+            # Parse recipient (255 bytes)
+            recipient_bytes = payload[16:271]
             recipient = recipient_bytes.rstrip(b'\0').decode('utf-8')
             
             if not recipient:
                 return self.protocol_handler.create_error_response("Empty recipient")
             
             # Parse key length (4 bytes, little-endian)
-            key_length = int.from_bytes(payload[255:259], byteorder='little')
+            key_length = int.from_bytes(payload[271:275], byteorder='little')
             
-            if len(payload) < 259 + key_length:
+            if len(payload) < 275 + key_length:
                 return self.protocol_handler.create_error_response("Invalid encrypted key length")
             
             # Extract encrypted key
-            encrypted_key = payload[259:259 + key_length]
+            encrypted_key = payload[275:275 + key_length]
             
-            print(f"Symmetric key request: from <unknown> to {recipient}")
+            print(f"Symmetric key request: from {sender_id} to {recipient}")
             print(f"Encrypted key length: {key_length} bytes")
             
             # Validate that recipient exists
@@ -416,12 +413,9 @@ class MessageUServer:
             
             print(f"Recipient found: {recipient_client['name']} (ID: {recipient_client['client_id']})")
             
-            # Store the encrypted symmetric key in the database as a special message type
-            # For now, we'll use a placeholder sender ID
-            sender_id = "unknown_sender"
-            
-            # Convert encrypted key to string for storage
-            encrypted_key_str = encrypted_key.decode('latin1')  # Use latin1 to preserve binary data
+            # Convert encrypted key to base64 string for storage
+            import base64
+            encrypted_key_str = base64.b64encode(encrypted_key).decode('ascii')
             
             if self.database.store_message(sender_id, recipient_client['client_id'], 2, encrypted_key_str):
                 print(f"Symmetric key stored successfully for {recipient_client['name']}")

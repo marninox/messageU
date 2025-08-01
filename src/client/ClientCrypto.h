@@ -20,17 +20,20 @@ private:
     // Helper methods
     std::vector<uint8_t> generateRandomBytes(size_t length);
     std::string base64Encode(const std::vector<uint8_t>& data);
-    std::vector<uint8_t> base64Decode(const std::string& encoded);
     
 public:
     ClientCrypto();
     ~ClientCrypto();
+    
+    // Helper methods
+    std::vector<uint8_t> base64Decode(const std::string& encoded);
     
     // RSA Key Management
     bool generateKeyPair();
     bool loadKeysFromFile(const std::string& filename);
     bool saveKeysToFile(const std::string& filename);
     bool loadServerPublicKey(const std::string& filename);
+    bool loadPrivateKeyFromPEM(const std::string& pem_key);
     
     // Symmetric Key Management
     std::vector<uint8_t> generateSymmetricKey();

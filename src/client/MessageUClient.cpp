@@ -117,9 +117,12 @@ bool MessageUClient::loadClientConfig() {
         
         // Load the private key into the crypto object if available
         if (line_count >= 4 && !private_key.empty()) {
-            // For now, we'll just note that the private key is available
-            // In a real implementation, we would load it into the crypto object
-            std::cout << "Private key available for decryption" << std::endl;
+            // Load the private key into the crypto object
+            if (crypto_.loadPrivateKeyFromPEM(private_key)) {
+                std::cout << "Private key loaded for decryption" << std::endl;
+            } else {
+                std::cout << "Warning: Failed to load private key for decryption" << std::endl;
+            }
         }
         
         return true;
@@ -435,7 +438,7 @@ void MessageUClient::getWaitingMessages() {
     std::cout << "=== Get Waiting Messages ===" << std::endl;
     
     // Create request for waiting messages
-    std::vector<uint8_t> request = protocol_.createRequestMessagesRequest();
+    std::vector<uint8_t> request = protocol_.createRequestMessagesRequest(client_id_);
     
     // Connect to server
     if (!network_.connect(server_ip_, server_port_)) {
@@ -475,6 +478,7 @@ void MessageUClient::getWaitingMessages() {
             std::cout << "\nWaiting Messages:" << std::endl;
             std::cout << "=================" << std::endl;
             
+            // First, process any symmetric key messages (Type 2)
             for (size_t i = 0; i < messages.size(); i++) {
                 auto message_data = messages[i];
                 std::string from_client_id = std::get<0>(message_data);
@@ -482,30 +486,74 @@ void MessageUClient::getWaitingMessages() {
                 uint8_t message_type = std::get<2>(message_data);
                 std::string content = std::get<3>(message_data);
                 
-                // Convert content string to bytes for decryption
-                std::vector<uint8_t> encrypted_content(content.begin(), content.end());
-                
-                // Try to decrypt the message
-                std::string decrypted_content;
-                if (crypto_.hasSymmetricKey(from_client_id)) {
-                    std::vector<uint8_t> symmetric_key = crypto_.getSymmetricKey(from_client_id);
-                    std::vector<uint8_t> decrypted_bytes = crypto_.decryptAES(encrypted_content, symmetric_key);
+                if (message_type == 2) { // Symmetric key message
+                    std::cout << "Processing symmetric key from: " << from_client_id << std::endl;
                     
-                    if (!decrypted_bytes.empty()) {
-                        decrypted_content = std::string(decrypted_bytes.begin(), decrypted_bytes.end());
-                    } else {
-                        decrypted_content = "[Failed to decrypt message]";
+                    // Convert content string to bytes for processing
+                    std::vector<uint8_t> encrypted_key;
+                    
+                    // Decode base64 content
+                    try {
+                        std::string base64_content = content;
+                        encrypted_key = crypto_.base64Decode(base64_content);
+                    } catch (...) {
+                        // Fallback: treat as raw bytes
+                        encrypted_key = std::vector<uint8_t>(content.begin(), content.end());
                     }
-                } else {
-                    decrypted_content = "[No symmetric key available for decryption]";
+                    
+                    // Process the symmetric key exchange message
+                    if (processSymmetricKeyMessage(from_client_id, encrypted_key)) {
+                        std::cout << "✓ Symmetric key processed successfully from " << from_client_id << std::endl;
+                    } else {
+                        std::cout << "✗ Failed to process symmetric key from " << from_client_id << std::endl;
+                    }
                 }
+            }
+            
+            // Now process regular messages (Type 1)
+            for (size_t i = 0; i < messages.size(); i++) {
+                auto message_data = messages[i];
+                std::string from_client_id = std::get<0>(message_data);
+                uint32_t message_id = std::get<1>(message_data);
+                uint8_t message_type = std::get<2>(message_data);
+                std::string content = std::get<3>(message_data);
                 
-                std::cout << "Message " << (i + 1) << ":" << std::endl;
-                std::cout << "  From: " << from_client_id << std::endl;
-                std::cout << "  ID: " << message_id << std::endl;
-                std::cout << "  Type: " << static_cast<int>(message_type) << std::endl;
-                std::cout << "  Content: " << decrypted_content << std::endl;
-                std::cout << "  ---" << std::endl;
+                if (message_type == 1) { // Regular message
+                    // Convert content string to bytes for decryption
+                    std::vector<uint8_t> encrypted_content;
+                    
+                    // Decode base64 content
+                    try {
+                        // Simple base64 decoding (for testing)
+                        std::string base64_content = content;
+                        encrypted_content = crypto_.base64Decode(base64_content);
+                    } catch (...) {
+                        // Fallback: treat as raw bytes
+                        encrypted_content = std::vector<uint8_t>(content.begin(), content.end());
+                    }
+                    
+                    // Try to decrypt the message
+                    std::string decrypted_content;
+                    if (crypto_.hasSymmetricKey(from_client_id)) {
+                        std::vector<uint8_t> symmetric_key = crypto_.getSymmetricKey(from_client_id);
+                        std::vector<uint8_t> decrypted_bytes = crypto_.decryptAES(encrypted_content, symmetric_key);
+                        
+                        if (!decrypted_bytes.empty()) {
+                            decrypted_content = std::string(decrypted_bytes.begin(), decrypted_bytes.end());
+                        } else {
+                            decrypted_content = "[Failed to decrypt message]";
+                        }
+                    } else {
+                        decrypted_content = "[No symmetric key available for decryption]";
+                    }
+                    
+                    std::cout << "Message " << (i + 1) << ":" << std::endl;
+                    std::cout << "  From: " << from_client_id << std::endl;
+                    std::cout << "  ID: " << message_id << std::endl;
+                    std::cout << "  Type: " << static_cast<int>(message_type) << std::endl;
+                    std::cout << "  Content: " << decrypted_content << std::endl;
+                    std::cout << "  ---" << std::endl;
+                }
             }
             std::cout << "=================" << std::endl;
         } else {
@@ -585,7 +633,7 @@ void MessageUClient::sendMessage() {
     std::cout << "Message encrypted successfully." << std::endl;
     
     // Create send message request with encrypted content
-    std::vector<uint8_t> request = protocol_.createSendMessageRequest(recipient, encrypted_message);
+    std::vector<uint8_t> request = protocol_.createSendMessageRequest(client_id_, recipient, encrypted_message);
     
     // Connect to server
     if (!network_.connect(server_ip_, server_port_)) {
@@ -728,7 +776,7 @@ bool MessageUClient::sendSymmetricKey(const std::string& recipient) {
     }
     
     // Create symmetric key request
-    std::vector<uint8_t> request = protocol_.createSendSymmetricKeyRequest(recipient, encrypted_key);
+    std::vector<uint8_t> request = protocol_.createSendSymmetricKeyRequest(client_id_, recipient, encrypted_key);
     
     // Connect to server
     if (!network_.connect(server_ip_, server_port_)) {

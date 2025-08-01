@@ -83,9 +83,12 @@ std::vector<uint8_t> ProtocolHandler::createLoginRequest(const std::string& user
     return result;
 }
 
-std::vector<uint8_t> ProtocolHandler::createSendMessageRequest(const std::string& recipient, const std::vector<uint8_t>& message) {
-    // Create payload: recipient(255) + message_length(4) + message
+std::vector<uint8_t> ProtocolHandler::createSendMessageRequest(const std::string& sender_id, const std::string& recipient, const std::vector<uint8_t>& message) {
+    // Create payload: sender_id(16) + recipient(255) + message_length(4) + message
     std::vector<uint8_t> payload;
+    
+    auto sender_id_bytes = packString(sender_id, ProtocolSizes::CLIENT_ID_SIZE);
+    payload.insert(payload.end(), sender_id_bytes.begin(), sender_id_bytes.end());
     
     auto recipient_bytes = packString(recipient, ProtocolSizes::USERNAME_SIZE);
     payload.insert(payload.end(), recipient_bytes.begin(), recipient_bytes.end());
@@ -129,9 +132,9 @@ std::vector<uint8_t> ProtocolHandler::createSendMessageRequest(const std::string
     return result;
 }
 
-std::vector<uint8_t> ProtocolHandler::createRequestMessagesRequest() {
-    // Empty payload
-    std::vector<uint8_t> payload;
+std::vector<uint8_t> ProtocolHandler::createRequestMessagesRequest(const std::string& client_id) {
+    // Create payload: client_id(16)
+    std::vector<uint8_t> payload = packString(client_id, ProtocolSizes::CLIENT_ID_SIZE);
     
     // Create header
     uint32_t checksum = calculateChecksum(payload);
@@ -146,14 +149,18 @@ std::vector<uint8_t> ProtocolHandler::createRequestMessagesRequest() {
     result.push_back((ProtocolCodes::REQUEST_MESSAGES >> 8) & 0xFF);
     
     // Payload size (2 bytes, little-endian)
-    result.push_back(0);  // payload_size = 0
-    result.push_back(0);
+    uint16_t payload_size = static_cast<uint16_t>(payload.size());
+    result.push_back(payload_size & 0xFF);
+    result.push_back((payload_size >> 8) & 0xFF);
     
     // Checksum (4 bytes, little-endian)
     result.push_back(checksum & 0xFF);
     result.push_back((checksum >> 8) & 0xFF);
     result.push_back((checksum >> 16) & 0xFF);
     result.push_back((checksum >> 24) & 0xFF);
+    
+    // Add payload
+    result.insert(result.end(), payload.begin(), payload.end());
     
     return result;
 }
@@ -220,9 +227,12 @@ std::vector<uint8_t> ProtocolHandler::createRequestPublicKeyRequest(const std::s
     return result;
 }
 
-std::vector<uint8_t> ProtocolHandler::createSendSymmetricKeyRequest(const std::string& recipient, const std::vector<uint8_t>& encrypted_key) {
-    // Create payload: recipient(255) + key_length(4) + encrypted_key
+std::vector<uint8_t> ProtocolHandler::createSendSymmetricKeyRequest(const std::string& sender_id, const std::string& recipient, const std::vector<uint8_t>& encrypted_key) {
+    // Create payload: sender_id(16) + recipient(255) + key_length(4) + encrypted_key
     std::vector<uint8_t> payload;
+    
+    auto sender_id_bytes = packString(sender_id, ProtocolSizes::CLIENT_ID_SIZE);
+    payload.insert(payload.end(), sender_id_bytes.begin(), sender_id_bytes.end());
     
     auto recipient_bytes = packString(recipient, ProtocolSizes::USERNAME_SIZE);
     payload.insert(payload.end(), recipient_bytes.begin(), recipient_bytes.end());

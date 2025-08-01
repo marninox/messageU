@@ -32,6 +32,7 @@ namespace ProtocolCodes {
 namespace ProtocolSizes {
     const uint16_t USERNAME_SIZE = 255;
     const uint16_t PUBLIC_KEY_SIZE = 1024;  // PEM public key size
+    const uint16_t CLIENT_ID_SIZE = 16;     // Client ID size
     const uint16_t HEADER_SIZE = 9;  // version(1) + code(2) + payload_size(2) + checksum(4)
 }
 
@@ -53,12 +54,12 @@ public:
     std::vector<uint8_t> createRegistrationRequest(const std::string& username, 
                                                   const std::string& public_key);
     std::vector<uint8_t> createLoginRequest(const std::string& username);
-    std::vector<uint8_t> createSendMessageRequest(const std::string& recipient, 
+    std::vector<uint8_t> createSendMessageRequest(const std::string& sender_id, const std::string& recipient, 
                                                  const std::vector<uint8_t>& message);
-    std::vector<uint8_t> createRequestMessagesRequest();
+    std::vector<uint8_t> createRequestMessagesRequest(const std::string& client_id);
     std::vector<uint8_t> createRequestUsersRequest();
     std::vector<uint8_t> createRequestPublicKeyRequest(const std::string& client_identifier);
-    std::vector<uint8_t> createSendSymmetricKeyRequest(const std::string& recipient, 
+    std::vector<uint8_t> createSendSymmetricKeyRequest(const std::string& sender_id, const std::string& recipient, 
                                                       const std::vector<uint8_t>& encrypted_key);
     std::vector<uint8_t> createLogoutRequest();
     
