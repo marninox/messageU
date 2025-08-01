@@ -10,6 +10,16 @@
 #include <cryptopp/osrng.h>
 #include <cryptopp/base64.h>
 
+/**
+ * ClientCrypto - Cryptographic operations for MessageU client
+ * 
+ * Features:
+ * - RSA-2048 key generation and management
+ * - AES-128-CBC encryption/decryption
+ * - Symmetric key exchange and storage
+ * - Base64 encoding/decoding for binary data
+ * - End-to-end encryption support
+ */
 class ClientCrypto {
 private:
     CryptoPP::AutoSeededRandomPool rng_;

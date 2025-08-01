@@ -5,6 +5,16 @@
 #include <string>
 #include <cstdint>
 
+/**
+ * ProtocolHandler - Binary protocol implementation for MessageU
+ * 
+ * Features:
+ * - Binary protocol serialization/deserialization
+ * - Checksum validation
+ * - Little-endian byte order
+ * - Fixed-size field handling
+ * - Support for all protocol message types
+ */
 // Protocol constants
 namespace ProtocolCodes {
     const uint16_t REGISTRATION_REQUEST = 1000;
@@ -79,7 +89,7 @@ public:
     std::vector<std::string> getUsersList() const;
     std::vector<std::pair<std::string, std::vector<uint8_t>>> getMessages() const;
     std::pair<std::string, std::string> getPublicKeyData() const;  // Returns (client_id, public_key)
-    std::vector<std::tuple<std::string, uint32_t, uint8_t, std::string>> getMessagesData() const;  // Returns (from_client_id, message_id, message_type, content)
+    std::vector<std::tuple<std::string, uint32_t, uint8_t, std::string, std::string>> getMessagesData() const;  // Returns (from_client_id, message_id, message_type, content, sender_name)
     std::pair<std::string, std::vector<uint8_t>> getSymmetricKeyData() const;  // Returns (sender_id, encrypted_key)
 };
 

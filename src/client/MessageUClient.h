@@ -7,6 +7,16 @@
 #include "ClientCrypto.h"
 #include "ProtocolHandler.h"
 
+/**
+ * MessageU Client - Main client application
+ * 
+ * Features:
+ * - User registration with RSA key generation
+ * - End-to-end encrypted messaging
+ * - Automatic key exchange and management
+ * - Client discovery and public key retrieval
+ * - Secure message storage and retrieval
+ */
 class MessageUClient {
 private:
     ClientNetwork network_;
@@ -30,12 +40,12 @@ private:
     bool loadClientConfig();
     void showMenu();
     void handleMenuChoice(int choice);
+    // Menu options
     void registerUser();
     void requestClientList();
     void getPublicKey();
     void getWaitingMessages();
     void sendMessage();
-    void sendFile();
     void exitClient();
     
     // Key exchange helper methods

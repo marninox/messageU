@@ -439,14 +439,14 @@ std::pair<std::string, std::string> ProtocolHandler::getPublicKeyData() const {
     return {client_id, public_key};
 }
 
-std::vector<std::tuple<std::string, uint32_t, uint8_t, std::string>> ProtocolHandler::getMessagesData() const {
+std::vector<std::tuple<std::string, uint32_t, uint8_t, std::string, std::string>> ProtocolHandler::getMessagesData() const {
     if (receive_buffer_.size() < 9) return {};
     
     // Extract payload
     uint16_t payload_size = static_cast<uint16_t>(receive_buffer_[3]) | (static_cast<uint16_t>(receive_buffer_[4]) << 8);
     if (receive_buffer_.size() < 9 + payload_size) return {};
     
-    std::vector<std::tuple<std::string, uint32_t, uint8_t, std::string>> messages;
+    std::vector<std::tuple<std::string, uint32_t, uint8_t, std::string, std::string>> messages;
     
     // Parse number of messages (4 bytes)
     if (payload_size < 4) return {};
@@ -457,7 +457,7 @@ std::vector<std::tuple<std::string, uint32_t, uint8_t, std::string>> ProtocolHan
     
     size_t offset = 13;  // Start after number of messages
     
-    // Parse each message: from_client_id(16) + message_id(4) + message_type(1) + content_size(4) + content
+    // Parse each message: from_client_id(16) + message_id(4) + message_type(1) + content_size(4) + content + sender_name(255)
     for (uint32_t i = 0; i < num_messages; i++) {
         if (offset + 16 + 4 + 1 + 4 > receive_buffer_.size()) break;
         
@@ -494,8 +494,13 @@ std::vector<std::tuple<std::string, uint32_t, uint8_t, std::string>> ProtocolHan
         }
         offset += content_size;
         
+        // Extract sender name (255 bytes)
+        if (offset + 255 > receive_buffer_.size()) break;
+        std::string sender_name = unpackString(receive_buffer_, offset, 255);
+        offset += 255;
+        
         // Add message to list
-        messages.push_back(std::make_tuple(from_client_id, message_id, message_type, content));
+        messages.push_back(std::make_tuple(from_client_id, message_id, message_type, content, sender_name));
     }
     
     return messages;

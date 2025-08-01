@@ -1,6 +1,13 @@
 """
 Database handler for MessageU server.
-Provides optional SQLite persistence for users and messages.
+Provides SQLite persistence for users and messages (bonus implementation).
+
+Features:
+- Thread-safe database connections
+- Client registration and management
+- Message storage and retrieval
+- Automatic table creation
+- Retry logic for database locks
 """
 
 import sqlite3
@@ -158,9 +165,12 @@ class DatabaseHandler:
             conn = self._get_connection()
             cursor = conn.cursor()
             cursor.execute('''
-                SELECT id, from_client_id, to_client_id, message_type, content, created_at
-                FROM messages WHERE to_client_id = ?
-                ORDER BY created_at ASC
+                SELECT m.id, m.from_client_id, m.to_client_id, m.message_type, m.content, m.created_at,
+                       c.name as sender_name
+                FROM messages m
+                LEFT JOIN clients c ON m.from_client_id = c.client_id
+                WHERE m.to_client_id = ?
+                ORDER BY m.created_at ASC
             ''', (to_client_id,))
             rows = cursor.fetchall()
             return [
@@ -170,7 +180,8 @@ class DatabaseHandler:
                     'to_client_id': row[2],
                     'message_type': row[3],
                     'content': row[4],
-                    'created_at': row[5]
+                    'created_at': row[5],
+                    'sender_name': row[6] if row[6] else 'Unknown'
                 }
                 for row in rows
             ]

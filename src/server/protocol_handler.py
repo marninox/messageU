@@ -116,31 +116,45 @@ class ProtocolHandler:
             return self.create_response(ProtocolCodes.REGISTRATION_FAILURE, payload)
     
     def create_messages_response(self, messages: List[Dict[str, Any]]) -> bytes:
-        """Create messages response for waiting messages."""
-        # Format: number_of_messages(4) + for each message: from_client_id(16) + message_id(4) + message_type(1) + content_size(4) + content
-        result = struct.pack('<I', len(messages))  # Number of messages (4 bytes)
+        """Create messages response."""
+        # Format: number_of_messages(4) + [from_client_id(16) + message_id(4) + message_type(1) + content_size(4) + content + sender_name(255)]
+        payload = bytearray()
+        
+        # Number of messages (4 bytes, little-endian)
+        num_messages = len(messages)
+        payload.extend(num_messages.to_bytes(4, byteorder='little'))
         
         for message in messages:
-            # From client ID (16 bytes, padded with nulls)
-            from_client_id = message.get('from_client_id', '')[:16].ljust(16, '\0')
-            result += from_client_id.encode('utf-8')
+            # From client ID (16 bytes)
+            from_client_id = message.get('from_client_id', '')
+            from_client_id_bytes = from_client_id.encode('utf-8')[:16].ljust(16, b'\0')
+            payload.extend(from_client_id_bytes)
             
             # Message ID (4 bytes, little-endian)
             message_id = message.get('id', 0)
-            result += struct.pack('<I', message_id)
+            payload.extend(message_id.to_bytes(4, byteorder='little'))
             
             # Message type (1 byte)
             message_type = message.get('message_type', 0)
-            result += struct.pack('<B', message_type)
+            payload.append(message_type)
             
-            # Content (variable length)
+            # Content
             content = message.get('content', '')
             content_bytes = content.encode('utf-8')
             content_size = len(content_bytes)
-            result += struct.pack('<I', content_size)  # Content size (4 bytes, little-endian)
-            result += content_bytes
+            
+            # Content size (4 bytes, little-endian)
+            payload.extend(content_size.to_bytes(4, byteorder='little'))
+            
+            # Content
+            payload.extend(content_bytes)
+            
+            # Sender name (255 bytes)
+            sender_name = message.get('sender_name', 'Unknown')
+            sender_name_bytes = sender_name.encode('utf-8')[:255].ljust(255, b'\0')
+            payload.extend(sender_name_bytes)
         
-        return self.create_response(ProtocolCodes.MESSAGES_RESPONSE, result)
+        return self.create_response(ProtocolCodes.MESSAGES_RESPONSE, payload)
     
     def create_send_message_response(self, success: bool, message: str = "") -> bytes:
         """Create send message response."""

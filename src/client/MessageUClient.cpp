@@ -44,7 +44,7 @@ void MessageUClient::run() {
             continue;
         }
         
-        if (choice == 7) { // Exit
+        if (choice == 6) { // Exit
             exitClient();
             break;
         }
@@ -140,8 +140,7 @@ void MessageUClient::showMenu() {
     std::cout << "3. Get public key" << std::endl;
     std::cout << "4. Get waiting messages" << std::endl;
     std::cout << "5. Send message" << std::endl;
-    std::cout << "6. Send file" << std::endl;
-    std::cout << "7. Exit" << std::endl;
+    std::cout << "6. Exit" << std::endl;
     std::cout << "===========================" << std::endl;
 }
 
@@ -162,11 +161,8 @@ void MessageUClient::handleMenuChoice(int choice) {
         case 5:
             sendMessage();
             break;
-        case 6:
-            sendFile();
-            break;
         default:
-            std::cout << "Invalid choice. Please select 1-7." << std::endl;
+            std::cout << "Invalid choice. Please select 1-6." << std::endl;
             break;
     }
 }
@@ -682,15 +678,6 @@ void MessageUClient::sendMessage() {
     }
     
     network_.disconnect();
-}
-
-void MessageUClient::sendFile() {
-    if (!is_registered_) {
-        std::cout << "Must register first before sending files." << std::endl;
-        return;
-    }
-    std::cout << "Selected: Send file" << std::endl;
-    // Send file logic will be implemented here
 }
 
 void MessageUClient::exitClient() {

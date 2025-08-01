@@ -2,6 +2,14 @@
 """
 MessageU Server - Main entry point
 Handles server initialization, client connections, and protocol processing.
+Version: 2.0 (with bonus database implementation)
+***worked on MAC environment***
+
+Features:
+- Multi-client TCP server with threading
+- Binary protocol handling
+- SQLite database for persistent storage (bonus)
+- End-to-end encryption support (server stores encrypted data only)
 """
 
 import socket
