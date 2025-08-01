@@ -214,8 +214,20 @@ class MessageUServer:
     
     def handle_request_users(self, payload):
         """Handle request for user list."""
-        # Placeholder for user list
-        return self.protocol_handler.create_error_response("Request users not implemented yet")
+        try:
+            # Get all clients from database
+            clients = self.database.get_all_clients()
+            
+            if clients:
+                print(f"Returning {len(clients)} clients to requesting user")
+                return self.protocol_handler.create_users_response(clients)
+            else:
+                print("No clients found in database")
+                return self.protocol_handler.create_users_response([])
+                
+        except Exception as e:
+            print(f"Error getting users list: {e}")
+            return self.protocol_handler.create_error_response("Failed to get users list")
     
     def handle_logout_request(self, payload):
         """Handle logout request."""

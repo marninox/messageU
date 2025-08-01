@@ -266,8 +266,41 @@ std::string ProtocolHandler::getErrorMessage() const {
 }
 
 std::vector<std::string> ProtocolHandler::getUsersList() const {
-    // Placeholder implementation
-    return {};
+    if (receive_buffer_.size() < 9) return {};
+    
+    // Extract payload
+    uint16_t payload_size = static_cast<uint16_t>(receive_buffer_[3]) | (static_cast<uint16_t>(receive_buffer_[4]) << 8);
+    if (receive_buffer_.size() < 9 + payload_size) return {};
+    
+    std::vector<std::string> users;
+    
+    // Parse number of users (4 bytes)
+    if (payload_size < 4) return {};
+    uint32_t num_users = static_cast<uint32_t>(receive_buffer_[9]) |
+                        (static_cast<uint32_t>(receive_buffer_[10]) << 8) |
+                        (static_cast<uint32_t>(receive_buffer_[11]) << 16) |
+                        (static_cast<uint32_t>(receive_buffer_[12]) << 24);
+    
+    size_t offset = 13;  // Start after number of users
+    
+    // Parse each user: client_id(16) + name(255)
+    for (uint32_t i = 0; i < num_users; i++) {
+        if (offset + 16 + 255 > receive_buffer_.size()) break;
+        
+        // Extract client ID (16 bytes)
+        std::string client_id = unpackString(receive_buffer_, offset, 16);
+        offset += 16;
+        
+        // Extract name (255 bytes)
+        std::string name = unpackString(receive_buffer_, offset, 255);
+        offset += 255;
+        
+        // Format: "Name (ID: client_id)"
+        std::string user_info = name + " (ID: " + client_id + ")";
+        users.push_back(user_info);
+    }
+    
+    return users;
 }
 
 std::vector<std::pair<std::string, std::vector<uint8_t>>> ProtocolHandler::getMessages() const {
@@ -282,7 +315,7 @@ std::vector<uint8_t> ProtocolHandler::packString(const std::string& str, size_t 
     return result;
 }
 
-std::string ProtocolHandler::unpackString(const std::vector<uint8_t>& data, size_t offset, size_t fixed_size) {
+std::string ProtocolHandler::unpackString(const std::vector<uint8_t>& data, size_t offset, size_t fixed_size) const {
     if (offset + fixed_size > data.size()) return "";
     
     std::string result;

@@ -38,7 +38,7 @@ private:
     
     // Helper methods
     std::vector<uint8_t> packString(const std::string& str, size_t fixed_size);
-    std::string unpackString(const std::vector<uint8_t>& data, size_t offset, size_t fixed_size);
+    std::string unpackString(const std::vector<uint8_t>& data, size_t offset, size_t fixed_size) const;
     uint32_t calculateChecksum(const std::vector<uint8_t>& data);
     
 public:

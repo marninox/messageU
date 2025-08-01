@@ -266,8 +266,65 @@ void MessageUClient::requestClientList() {
         std::cout << "Must register first before requesting client list." << std::endl;
         return;
     }
-    std::cout << "Selected: Request client list" << std::endl;
-    // Client list request logic will be implemented here
+    
+    std::cout << "=== Requesting Client List ===" << std::endl;
+    
+    // Create request for client list
+    std::vector<uint8_t> request = protocol_.createRequestUsersRequest();
+    
+    // Connect to server
+    if (!network_.connect(server_ip_, server_port_)) {
+        std::cout << "Failed to connect to server." << std::endl;
+        return;
+    }
+    
+    std::cout << "Connected to server. Sending client list request..." << std::endl;
+    
+    // Send request
+    if (!network_.sendData(request)) {
+        std::cout << "Failed to send client list request." << std::endl;
+        network_.disconnect();
+        return;
+    }
+    
+    // Receive response
+    std::vector<uint8_t> response;
+    if (!network_.receiveData(response)) {
+        std::cout << "Failed to receive client list response." << std::endl;
+        network_.disconnect();
+        return;
+    }
+    
+    // Parse response
+    if (!protocol_.parseResponse(response)) {
+        std::cout << "Invalid response format." << std::endl;
+        network_.disconnect();
+        return;
+    }
+    
+    if (protocol_.isUsersListReceived()) {
+        // Display client list
+        std::vector<std::string> users = protocol_.getUsersList();
+        if (!users.empty()) {
+            std::cout << "\nRegistered Clients:" << std::endl;
+            std::cout << "==================" << std::endl;
+            for (const auto& user : users) {
+                std::cout << "- " << user << std::endl;
+            }
+            std::cout << "==================" << std::endl;
+        } else {
+            std::cout << "No clients found." << std::endl;
+        }
+    } else {
+        std::string error_msg = protocol_.getErrorMessage();
+        if (!error_msg.empty()) {
+            std::cout << "Failed to get client list: " << error_msg << std::endl;
+        } else {
+            std::cout << "Failed to get client list: Unknown error" << std::endl;
+        }
+    }
+    
+    network_.disconnect();
 }
 
 void MessageUClient::getPublicKey() {

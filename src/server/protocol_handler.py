@@ -78,4 +78,20 @@ class ProtocolHandler:
     def create_error_response(self, error_message: str) -> bytes:
         """Create error response."""
         payload = error_message.encode('utf-8')
-        return self.create_response(ProtocolCodes.REGISTRATION_FAILURE, payload) 
+        return self.create_response(ProtocolCodes.REGISTRATION_FAILURE, payload)
+    
+    def create_users_response(self, users: List[Dict[str, Any]]) -> bytes:
+        """Create users response for client list."""
+        # Format: number_of_users(4) + for each user: client_id(16) + name(255)
+        result = struct.pack('<I', len(users))  # Number of users (4 bytes)
+        
+        for user in users:
+            # Client ID (16 bytes, padded with nulls)
+            client_id = user.get('client_id', '')[:16].ljust(16, '\0')
+            result += client_id.encode('utf-8')
+            
+            # Name (255 bytes, padded with nulls)
+            name = user.get('name', '')[:255].ljust(255, '\0')
+            result += name.encode('utf-8')
+        
+        return self.create_response(ProtocolCodes.USERS_RESPONSE, result) 
