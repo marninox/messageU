@@ -332,8 +332,79 @@ void MessageUClient::getPublicKey() {
         std::cout << "Must register first before getting public keys." << std::endl;
         return;
     }
-    std::cout << "Selected: Get public key" << std::endl;
-    // Public key request logic will be implemented here
+    
+    std::cout << "=== Request Public Key ===" << std::endl;
+    
+    // Get client identifier from user
+    std::string client_identifier;
+    std::cout << "Enter client ID or nickname: ";
+    std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n'); // Clear buffer
+    std::getline(std::cin, client_identifier);
+    
+    if (client_identifier.empty()) {
+        std::cout << "Client identifier cannot be empty." << std::endl;
+        return;
+    }
+    
+    // Create public key request
+    std::vector<uint8_t> request = protocol_.createRequestPublicKeyRequest(client_identifier);
+    
+    // Connect to server
+    if (!network_.connect(server_ip_, server_port_)) {
+        std::cout << "Failed to connect to server." << std::endl;
+        return;
+    }
+    
+    std::cout << "Connected to server. Sending public key request..." << std::endl;
+    
+    // Send request
+    if (!network_.sendData(request)) {
+        std::cout << "Failed to send public key request." << std::endl;
+        network_.disconnect();
+        return;
+    }
+    
+    // Receive response
+    std::vector<uint8_t> response;
+    if (!network_.receiveData(response)) {
+        std::cout << "Failed to receive public key response." << std::endl;
+        network_.disconnect();
+        return;
+    }
+    
+    // Parse response
+    if (!protocol_.parseResponse(response)) {
+        std::cout << "Invalid response format." << std::endl;
+        network_.disconnect();
+        return;
+    }
+    
+    if (protocol_.isPublicKeyReceived()) {
+        // Extract public key data
+        auto public_key_data = protocol_.getPublicKeyData();
+        std::string client_id = public_key_data.first;
+        std::string public_key = public_key_data.second;
+        
+        if (!client_id.empty() && !public_key.empty()) {
+            std::cout << "\nPublic Key Retrieved Successfully!" << std::endl;
+            std::cout << "================================" << std::endl;
+            std::cout << "Client ID: " << client_id << std::endl;
+            std::cout << "Public Key:" << std::endl;
+            std::cout << public_key << std::endl;
+            std::cout << "================================" << std::endl;
+        } else {
+            std::cout << "Invalid public key response format." << std::endl;
+        }
+    } else {
+        std::string error_msg = protocol_.getErrorMessage();
+        if (!error_msg.empty()) {
+            std::cout << "Failed to get public key: " << error_msg << std::endl;
+        } else {
+            std::cout << "Failed to get public key: Unknown error" << std::endl;
+        }
+    }
+    
+    network_.disconnect();
 }
 
 void MessageUClient::getWaitingMessages() {

@@ -158,6 +158,8 @@ class MessageUServer:
                 return self.handle_request_messages(payload)
             elif header == 5000:  # Request users
                 return self.handle_request_users(payload)
+            elif header == 5002:  # Request public key
+                return self.handle_get_public_key_request(payload)
             elif header == 6000:  # Logout request
                 return self.handle_logout_request(payload)
             else:
@@ -228,6 +230,45 @@ class MessageUServer:
         except Exception as e:
             print(f"Error getting users list: {e}")
             return self.protocol_handler.create_error_response("Failed to get users list")
+    
+    def handle_get_public_key_request(self, payload):
+        """Handle request for public key."""
+        try:
+            # Parse the requested client identifier from payload
+            if len(payload) < 255:  # client_identifier(255)
+                return self.protocol_handler.create_error_response("Invalid public key request payload")
+            
+            identifier_bytes = payload[:255]
+            identifier = identifier_bytes.rstrip(b'\0').decode('utf-8')
+            
+            if not identifier:
+                return self.protocol_handler.create_error_response("Empty client identifier")
+            
+            print(f"Public key request for client: {identifier}")
+            
+            # Look up the client in database
+            client = self.database.get_client_by_identifier(identifier)
+            
+            if client:
+                print(f"Found client: {client['name']} (ID: {client['client_id']})")
+                return self.protocol_handler.create_public_key_response(
+                    True, 
+                    client['client_id'], 
+                    client['public_key'], 
+                    f"Public key for {client['name']}"
+                )
+            else:
+                print(f"Client not found: {identifier}")
+                return self.protocol_handler.create_public_key_response(
+                    False, 
+                    "", 
+                    "", 
+                    f"Client '{identifier}' not found"
+                )
+                
+        except Exception as e:
+            print(f"Error in public key request: {e}")
+            return self.protocol_handler.create_error_response("Failed to get public key")
     
     def handle_logout_request(self, payload):
         """Handle logout request."""

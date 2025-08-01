@@ -20,6 +20,8 @@ namespace ProtocolCodes {
     const uint16_t MESSAGES_RESPONSE = 4001;
     const uint16_t REQUEST_USERS = 5000;
     const uint16_t USERS_RESPONSE = 5001;
+    const uint16_t REQUEST_PUBLIC_KEY = 5002;
+    const uint16_t PUBLIC_KEY_RESPONSE = 5003;
     const uint16_t LOGOUT_REQUEST = 6000;
     const uint16_t LOGOUT_SUCCESS = 6001;
 }
@@ -53,6 +55,7 @@ public:
                                                  const std::vector<uint8_t>& message);
     std::vector<uint8_t> createRequestMessagesRequest();
     std::vector<uint8_t> createRequestUsersRequest();
+    std::vector<uint8_t> createRequestPublicKeyRequest(const std::string& client_identifier);
     std::vector<uint8_t> createLogoutRequest();
     
     // Protocol message parsing
@@ -61,11 +64,13 @@ public:
     bool isLoginSuccess() const;
     bool isMessageReceived() const;
     bool isUsersListReceived() const;
+    bool isPublicKeyReceived() const;
     
     // Data extraction
     std::string getErrorMessage() const;
     std::vector<std::string> getUsersList() const;
     std::vector<std::pair<std::string, std::vector<uint8_t>>> getMessages() const;
+    std::pair<std::string, std::string> getPublicKeyData() const;  // Returns (client_id, public_key)
 };
 
 #endif // PROTOCOL_HANDLER_H 

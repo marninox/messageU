@@ -187,6 +187,39 @@ std::vector<uint8_t> ProtocolHandler::createRequestUsersRequest() {
     return result;
 }
 
+std::vector<uint8_t> ProtocolHandler::createRequestPublicKeyRequest(const std::string& client_identifier) {
+    // Create payload: client_identifier(255)
+    std::vector<uint8_t> payload = packString(client_identifier, ProtocolSizes::USERNAME_SIZE);
+    
+    // Create header
+    uint32_t checksum = calculateChecksum(payload);
+    
+    std::vector<uint8_t> result;
+    
+    // Version (1 byte)
+    result.push_back(1);
+    
+    // Code (2 bytes, little-endian)
+    result.push_back(ProtocolCodes::REQUEST_PUBLIC_KEY & 0xFF);
+    result.push_back((ProtocolCodes::REQUEST_PUBLIC_KEY >> 8) & 0xFF);
+    
+    // Payload size (2 bytes, little-endian)
+    uint16_t payload_size = static_cast<uint16_t>(payload.size());
+    result.push_back(payload_size & 0xFF);
+    result.push_back((payload_size >> 8) & 0xFF);
+    
+    // Checksum (4 bytes, little-endian)
+    result.push_back(checksum & 0xFF);
+    result.push_back((checksum >> 8) & 0xFF);
+    result.push_back((checksum >> 16) & 0xFF);
+    result.push_back((checksum >> 24) & 0xFF);
+    
+    // Add payload
+    result.insert(result.end(), payload.begin(), payload.end());
+    
+    return result;
+}
+
 std::vector<uint8_t> ProtocolHandler::createLogoutRequest() {
     // Empty payload
     std::vector<uint8_t> payload;
@@ -251,6 +284,13 @@ bool ProtocolHandler::isUsersListReceived() const {
     return code == ProtocolCodes::USERS_RESPONSE;
 }
 
+bool ProtocolHandler::isPublicKeyReceived() const {
+    if (receive_buffer_.size() < 9) return false;
+    
+    uint16_t code = static_cast<uint16_t>(receive_buffer_[1]) | (static_cast<uint16_t>(receive_buffer_[2]) << 8);
+    return code == ProtocolCodes::PUBLIC_KEY_RESPONSE;
+}
+
 std::string ProtocolHandler::getErrorMessage() const {
     if (receive_buffer_.size() < 9) return "";
     
@@ -301,6 +341,25 @@ std::vector<std::string> ProtocolHandler::getUsersList() const {
     }
     
     return users;
+}
+
+std::pair<std::string, std::string> ProtocolHandler::getPublicKeyData() const {
+    if (receive_buffer_.size() < 9) return {"", ""};
+    
+    // Extract payload
+    uint16_t payload_size = static_cast<uint16_t>(receive_buffer_[3]) | (static_cast<uint16_t>(receive_buffer_[4]) << 8);
+    if (receive_buffer_.size() < 9 + payload_size) return {"", ""};
+    
+    // Parse: client_id(16) + public_key(160)
+    if (payload_size < 16 + 160) return {"", ""};
+    
+    // Extract client ID (16 bytes)
+    std::string client_id = unpackString(receive_buffer_, 9, 16);
+    
+    // Extract public key (160 bytes)
+    std::string public_key = unpackString(receive_buffer_, 9 + 16, 160);
+    
+    return {client_id, public_key};
 }
 
 std::vector<std::pair<std::string, std::vector<uint8_t>>> ProtocolHandler::getMessages() const {

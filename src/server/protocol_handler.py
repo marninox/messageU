@@ -22,6 +22,8 @@ class ProtocolCodes(IntEnum):
     MESSAGES_RESPONSE = 4001
     REQUEST_USERS = 5000
     USERS_RESPONSE = 5001
+    REQUEST_PUBLIC_KEY = 5002
+    PUBLIC_KEY_RESPONSE = 5003
     LOGOUT_REQUEST = 6000
     LOGOUT_SUCCESS = 6001
 
@@ -94,4 +96,18 @@ class ProtocolHandler:
             name = user.get('name', '')[:255].ljust(255, '\0')
             result += name.encode('utf-8')
         
-        return self.create_response(ProtocolCodes.USERS_RESPONSE, result) 
+        return self.create_response(ProtocolCodes.USERS_RESPONSE, result)
+    
+    def create_public_key_response(self, success: bool, client_id: str = "", public_key: str = "", message: str = "") -> bytes:
+        """Create public key response."""
+        if success:
+            # Success: client_id(16) + public_key(160) + message
+            client_id_bytes = client_id.encode('utf-8')[:16].ljust(16, b'\0')
+            public_key_bytes = public_key.encode('utf-8')[:160].ljust(160, b'\0')
+            message_bytes = message.encode('utf-8')
+            payload = client_id_bytes + public_key_bytes + message_bytes
+            return self.create_response(ProtocolCodes.PUBLIC_KEY_RESPONSE, payload)
+        else:
+            # Failure: error message
+            payload = message.encode('utf-8')
+            return self.create_response(ProtocolCodes.REGISTRATION_FAILURE, payload)  # Using REGISTRATION_FAILURE for errors 

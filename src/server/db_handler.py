@@ -130,6 +130,28 @@ class DatabaseHandler:
             print(f"Database error getting all clients: {e}")
             return []
     
+    def get_client_by_identifier(self, identifier: str) -> Optional[Dict[str, Any]]:
+        """Get a client by ID or name."""
+        try:
+            conn = self._get_connection()
+            cursor = conn.cursor()
+            cursor.execute('''
+                SELECT client_id, name, public_key, last_seen
+                FROM clients WHERE client_id = ? OR name = ?
+            ''', (identifier, identifier))
+            row = cursor.fetchone()
+            if row:
+                return {
+                    'client_id': row[0],
+                    'name': row[1],
+                    'public_key': row[2],
+                    'last_seen': row[3]
+                }
+            return None
+        except sqlite3.Error as e:
+            print(f"Database error getting client by identifier: {e}")
+            return None
+    
     def update_last_seen(self, client_id: str):
         """Update the last_seen timestamp for a client."""
         try:
