@@ -67,9 +67,20 @@ bool MessageUClient::loadServerConfig() {
     
     std::string line;
     if (std::getline(file, line)) {
-        std::istringstream iss(line);
-        if (!(iss >> server_ip_ >> server_port_)) {
-            std::cerr << "Error: Invalid server.info format!" << std::endl;
+        // Parse format: "ip:port"
+        size_t colon_pos = line.find(':');
+        if (colon_pos == std::string::npos) {
+            std::cerr << "Error: Invalid server.info format! Expected 'ip:port'" << std::endl;
+            return false;
+        }
+        
+        server_ip_ = line.substr(0, colon_pos);
+        std::string port_str = line.substr(colon_pos + 1);
+        
+        try {
+            server_port_ = std::stoi(port_str);
+        } catch (const std::exception& e) {
+            std::cerr << "Error: Invalid port number in server.info!" << std::endl;
             return false;
         }
     } else {
