@@ -16,8 +16,6 @@ import socket
 import threading
 import sys
 import os
-from client import ClientConnection, ClientManager
-from message import Message, MessageManager, MessageFormatter
 from db_handler import DatabaseHandler
 from protocol_handler import ProtocolHandler, ProtocolCodes
 import struct
@@ -31,9 +29,6 @@ class MessageUServer:
         self.port = 1357  # Default port
         self.server_socket = None
         self.running = False
-        self.client_manager = ClientManager()
-        self.message_manager = MessageManager()
-        self.message_formatter = MessageFormatter()
         self.database = DatabaseHandler()
         self.protocol_handler = ProtocolHandler()
         
